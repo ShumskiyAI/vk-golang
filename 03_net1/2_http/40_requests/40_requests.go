@@ -50,12 +50,11 @@ func runGetFullReq() {
 	req := &http.Request{
 		Method: http.MethodGet,
 		Header: http.Header{
-			"User-Agent": {"coursera/golang"},
+			"User-Agent": {"lecture/golang"},
 		},
 	}
 
 	req.URL, _ = url.Parse("http://127.0.0.1:8080/?id=42")
-	req.URL.Query().Set("user", "rvasily")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
