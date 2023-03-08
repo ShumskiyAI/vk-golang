@@ -12,27 +12,29 @@ const goroutinesNum = 3
 func startWorker(workerNum int, in <-chan string) {
 	for input := range in {
 		fmt.Println(formatWork(workerNum, input))
+		time.Sleep(10 * time.Millisecond)
 	}
 	printFinishWork(workerNum)
 }
 
 func main() {
 	runtime.GOMAXPROCS(0)
-	worketInput := make(chan string)
+	workerInput := make(chan string)
 	for i := 0; i < goroutinesNum; i++ {
-		go startWorker(i, worketInput)
+		go startWorker(i, workerInput)
 	}
 
 	months := []string{"Январь", "Февраль", "Март",
 		"Апрель", "Май", "Июнь",
 		"Июль", "Август", "Сентябрь",
 		"Октябрь", "Ноябрь", "Декабрь",
+		"123",
 	}
 
 	for _, monthName := range months {
-		worketInput <- monthName
+		workerInput <- monthName
 	}
-	close(worketInput) // попробуйте закомментировать
+	close(workerInput) // попробуйте закомментировать
 
 	time.Sleep(time.Millisecond)
 }

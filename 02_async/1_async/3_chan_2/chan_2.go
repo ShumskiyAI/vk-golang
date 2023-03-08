@@ -5,21 +5,20 @@ import (
 )
 
 func main() {
-	in := make(chan int, 1)
+	in := make(chan int)
 
+	// go func(out chan<- int) {
 	go func(out chan<- int) {
-		go func(out chan<- int) {
-			for i := 0; i <= 10; i++ {
-				fmt.Println("before", i)
-				out <- i
-				fmt.Println("after", i)
-			}
+		for i := 0; i <= 10; i++ {
+			fmt.Println("before", i)
+			out <- i
+			fmt.Println("after", i)
+		}
 
-			close(out)
-			//out <- 12
-			fmt.Println("generator finish")
-		}(in)
+		close(out)
+		fmt.Println("generator finish")
 	}(in)
+	// }(in)
 
 	for i := range in {
 		fmt.Println("\tget", i)

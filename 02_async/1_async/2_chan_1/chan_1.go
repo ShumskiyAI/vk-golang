@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+type SomeStruct struct {
+	Tmp bool
+}
+
 func main() {
 	ch1 := make(chan int)
 
@@ -15,7 +19,7 @@ func main() {
 		fmt.Println("GO: after read from chan")
 	}(ch1)
 	fmt.Println("MAIN: before put to chan")
-	//time.Sleep(1000 * time.Millisecond)
+	// time.Sleep(1000 * time.Millisecond)
 
 	ch1 <- 42
 	ch1 <- 100500

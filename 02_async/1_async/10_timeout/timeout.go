@@ -20,9 +20,6 @@ func main() {
 	select {
 	case <-timer.C:
 		fmt.Println("timer.C timeout happend")
-	case <-time.After(time.Minute):
-		// пока не выстрелит - не соберётся сборщиком мусора
-		fmt.Println("time.After timeout happend")
 	case result := <-longSQLQuery():
 		// освобождет ресурс
 		if !timer.Stop() {
