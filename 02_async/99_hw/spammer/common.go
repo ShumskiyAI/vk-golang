@@ -14,6 +14,10 @@ type cmd func(in, out chan interface{})
 var GetMessagesMaxUsersBatch = 2
 var HasSpamMaxAsyncRequests = 5
 
+func init() {
+	log.SetFlags(log.Default().Flags() | log.Lmicroseconds)
+}
+
 type User struct {
 	ID    uint64
 	Email string
