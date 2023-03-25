@@ -23,6 +23,11 @@ func (re *ResourceError) Error() string {
 	)
 }
 
+// for errors.Unwrap
+func (re *ResourceError) Unwrap() error {
+	return re.Err
+}
+
 func getRemoteResource() error {
 	url := "http://127.0.0.1:9999/pages?id=123"
 	_, err := client.Get(url)

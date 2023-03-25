@@ -24,7 +24,7 @@ func loginPage(w http.ResponseWriter, r *http.Request) {
 	expiration := time.Now().Add(10 * time.Hour)
 	cookie := http.Cookie{
 		Name:    "session_id",
-		Value:   "Nika",
+		Value:   "Queen",
 		Expires: expiration,
 	}
 	http.SetCookie(w, &cookie)

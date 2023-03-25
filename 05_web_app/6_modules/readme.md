@@ -1,8 +1,11 @@
-# https://github.com/golang-standards/project-layout/blob/master/README_ru.md
+# README
+
+<https://github.com/golang-standards/project-layout/blob/master/README_ru.md>
 
 go mod init myapp
-# go mod init github.com/rvasily/myapp
-go build
+
+// go mod init github.com/rvasily/myapp
+
 go mod download
 go mod verify
 go mod tidy

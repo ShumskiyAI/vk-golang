@@ -12,6 +12,11 @@ func List(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "You see user list\n")
 }
 
+func ListVK(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	fmt.Fprintf(w, "You see user list for subdomain %s\n", vars["subdomain"])
+}
+
 func Get(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	fmt.Fprintf(w, "you try to see user %s\n", vars["id"])
@@ -41,9 +46,16 @@ func main() {
 	r.HandleFunc("/users", List).
 		Host("localhost")
 
+	r.HandleFunc("/users", ListVK).
+		Host("{subdomain}.vk.ru")
+
 	r.HandleFunc("/users", Update).
 		Methods("PUT")
 
+		/*
+		   See anything wrong?
+		*/
+	r.HandleFunc("/users/{login:[0-9a-z]+}", Update)
 	r.HandleFunc("/users/{id:[0-9]+}", Get)
 
 	r.HandleFunc("/users/{login}", Create).

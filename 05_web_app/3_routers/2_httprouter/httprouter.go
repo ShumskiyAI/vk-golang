@@ -32,13 +32,20 @@ func Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	fmt.Fprintf(w, "you try to update %s\n", ps.ByName("login"))
 }
 
+func UpdateHandle(w http.ResponseWriter, r *http.Request) {
+	ps := httprouter.ParamsFromContext(r.Context())
+
+	fmt.Fprintf(w, "you try to update %s\n", ps.ByName("login"))
+}
+
 func main() {
 	router := httprouter.New()
 	router.GET("/", List)
 	router.GET("/users", List)
 	router.PUT("/users", Create)
 	router.GET("/users/:id", Get)
-	router.POST("/users/:login", Update)
+	// router.POST("/users/:login", Update)
+	router.HandlerFunc(http.MethodPost, "/users/:login", UpdateHandle)
 
 	fmt.Println("starting server at :8080")
 	log.Fatal(http.ListenAndServe(":8080", router))

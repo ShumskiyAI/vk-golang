@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/buaazp/fasthttprouter"
+	fasthttprouter "github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
@@ -26,7 +26,7 @@ func GetUser(ctx *fasthttp.RequestCtx) {
 func main() {
 	router := fasthttprouter.New()
 	router.GET("/", Index)
-	router.GET("/users/:id", GetUser)
+	router.GET("/users/{id}", GetUser)
 
 	fmt.Println("starting server at :8080")
 	log.Fatal(fasthttp.ListenAndServe(":8080", router.Handler))

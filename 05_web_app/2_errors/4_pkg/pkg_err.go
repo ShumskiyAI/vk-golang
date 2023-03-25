@@ -18,6 +18,7 @@ func getRemoteResource() error {
 	_, err := client.Get(url)
 	if err != nil {
 		return errors.Wrap(err, "resource error")
+		// return fmt.Errorf("test: %w", errors.Wrap(err, "resource error"))
 	}
 	return nil
 }
@@ -26,6 +27,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	err := getRemoteResource()
 	if err != nil {
 		fmt.Printf("full err: %+v\n", err)
+		// var tracer interface {
+		// 	StackTrace() errors.StackTrace
+		// } = nil
+		// errors.As(err, &tracer)
+		// fmt.Printf("full err: %+v\n", tracer)
 		switch err := errors.Cause(err).(type) {
 		case *url.Error:
 			fmt.Printf("resource %s err: %+v\n", err.URL, err.Err)

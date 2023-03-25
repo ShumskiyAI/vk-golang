@@ -1,5 +1,7 @@
+# README
+
 go mod init crudapp
-# go mod init github.com/rvasily/crudapp
+// go mod init github.com/rvasily/crudapp
 go build
 go mod download
 go mod verify
