@@ -33,24 +33,24 @@ const (
 }`
 )
 
-// чтобы не было сюрпризов когда где-то не успела преключиться горутина и не успело что-то стортовать
-func wait(amout int) {
-	time.Sleep(time.Duration(amout) * 10 * time.Millisecond)
+// чтобы не было сюрпризов когда где-то не успела переключиться горутина и не успело что-то стартовать
+func wait(amount int) {
+	time.Sleep(time.Duration(amount) * 10 * time.Millisecond)
 }
 
 // утилитарная функция для коннекта к серверу
 func getGrpcConn(t *testing.T) *grpc.ClientConn {
-	grcpConn, err := grpc.Dial(
+	grpcConn, err := grpc.Dial(
 		listenAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		t.Fatalf("cant connect to grpc: %v", err)
 	}
-	return grcpConn
+	return grpcConn
 }
 
-// получаем контекст с нужнымы метаданными для ACL
+// получаем контекст с нужными метаданными для ACL
 func getConsumerCtx(consumerName string) context.Context {
 	// ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	ctx := context.Background()

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	// "encoding/json"
 	"fmt"
 
 	tgbotapi "github.com/skinass/telegram-bot-api/v5"
@@ -287,7 +286,7 @@ assignee: @ppetrov`,
 
 		{
 			// /unassign_ - снимает задачу с себя
-			// автору отправляется уведомление что задача осталась без исполнителя
+			// автору отправляется уведомление о том, что задача осталась без исполнителя
 			Petrov,
 			"/unassign_1",
 			map[int64]string{

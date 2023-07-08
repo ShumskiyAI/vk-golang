@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -100,7 +100,7 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 		return nil, fmt.Errorf("unknown error %s", err)
 	}
 	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body) //nolint:errcheck
+	body, _ := io.ReadAll(resp.Body) //nolint:errcheck
 
 	switch resp.StatusCode {
 	case http.StatusUnauthorized:

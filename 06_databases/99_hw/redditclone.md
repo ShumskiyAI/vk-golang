@@ -23,13 +23,13 @@
 
 1) Проектировать простые таблицы в mysql
 2) Писать основные запросы к mysql
-3) Тестировать паттерн репозрторий с mysql и mongodb
+3) Тестировать паттерн репозиторий с mysql и mongodb
 4) Тестировать http хендлеры которые приближены к реальности, а не фейковые, как в 3-м задании
 
 Опционально:
 
 1) Хранить сессии в тарантуле
-2) Хранить сесси в редисе ( <https://github.com/go-redis/redis> + <https://github.com/elliotchance/redismock>)
+2) Хранить сессии в редисе ( <https://github.com/go-redis/redis> + <https://github.com/elliotchance/redismock>)
 3) Хранить посты с комментами в mysql
 4) Если использовать postgres, то моки через <https://github.com/pashagolub/pgxmock>
 
