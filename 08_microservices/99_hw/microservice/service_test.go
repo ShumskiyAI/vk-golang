@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"reflect"
 	"runtime"
 	"strings"
@@ -450,9 +449,4 @@ func TestStat(t *testing.T) {
 	mu.Unlock()
 
 	finish()
-}
-
-func _dummyLog() {
-	fmt.Println(1)
-	log.Println(1)
 }

@@ -23,14 +23,20 @@ func TestSimple(t *testing.T) {
 		Username: "rvasily",
 		Active:   true,
 	}
-	jsonRaw, _ := json.Marshal(expected)
+	jsonRaw, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// fmt.Println(string(jsonRaw))
 
 	var tmpData interface{}
-	json.Unmarshal(jsonRaw, &tmpData)
+	err = json.Unmarshal(jsonRaw, &tmpData)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result := new(Simple)
-	err := i2s(tmpData, result) //nolint:typecheck
+	err = i2s(tmpData, result) //nolint:typecheck
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -58,14 +64,20 @@ func TestComplex(t *testing.T) {
 		Blocks:     []IDBlock{IDBlock{42}, IDBlock{42}},
 	}
 
-	jsonRaw, _ := json.Marshal(expected)
+	jsonRaw, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// fmt.Println(string(jsonRaw))
 
 	var tmpData interface{}
-	json.Unmarshal(jsonRaw, &tmpData)
+	err = json.Unmarshal(jsonRaw, &tmpData)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result := new(Complex)
-	err := i2s(tmpData, result) //nolint:typecheck
+	err = i2s(tmpData, result) //nolint:typecheck
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -83,13 +95,19 @@ func TestSlice(t *testing.T) {
 	}
 	expected := []Simple{smpl, smpl}
 
-	jsonRaw, _ := json.Marshal(expected)
+	jsonRaw, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var tmpData interface{}
-	json.Unmarshal(jsonRaw, &tmpData)
+	err = json.Unmarshal(jsonRaw, &tmpData)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result := []Simple{}
-	err := i2s(tmpData, &result) //nolint:typecheck
+	err = i2s(tmpData, &result) //nolint:typecheck
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -101,7 +119,7 @@ func TestSlice(t *testing.T) {
 
 type ErrorCase struct {
 	Result   interface{}
-	JsonData string
+	JSONData string
 }
 
 // аккуратно в этом тесте
@@ -147,9 +165,12 @@ func TestErrors(t *testing.T) {
 	}
 	for idx, item := range cases {
 		var tmpData interface{}
-		json.Unmarshal([]byte(item.JsonData), &tmpData)
+		err := json.Unmarshal([]byte(item.JSONData), &tmpData)
+		if err != nil {
+			t.Fatal(err)
+		}
 		inType := reflect.ValueOf(item.Result).Type()
-		err := i2s(tmpData, item.Result) //nolint:typecheck
+		err = i2s(tmpData, item.Result) //nolint:typecheck
 		outType := reflect.ValueOf(item.Result).Type()
 
 		if err == nil {
