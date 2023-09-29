@@ -39,18 +39,6 @@ backgroundImage: url('https://marp.app/assets/hero-background.svg')
 </div>
 <div>
 
-![](../common/static/01_lecture/v.persiyanova.png)
-
-<center>
-
-### Персиянова<br>Вероника
-
-###### Разработчик команды backend'a Почты
-
-</center>
-</div>
-<div>
-
 ![](../common/static/01_lecture/d.fedorova.png)
 
 <center>
@@ -73,6 +61,18 @@ backgroundImage: url('https://marp.app/assets/hero-background.svg')
 ###### Разработчик кросс-командных решений для backend'а Почты
 
 </center>
+
+</center>
+</div>
+<div>
+
+![](../common/static/01_lecture/a.sazonov.jpg)
+
+<center>
+
+### Персиянова<br>Вероника
+
+###### Разработчик команды backend'a Почты
 
 </div>
 
