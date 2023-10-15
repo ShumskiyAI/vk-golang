@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -20,7 +19,7 @@ func SlowSearch(out io.Writer) {
 		panic(err)
 	}
 
-	fileContents, err := ioutil.ReadAll(file)
+	fileContents, err := io.ReadAll(file)
 	if err != nil {
 		panic(err)
 	}

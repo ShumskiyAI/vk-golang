@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -48,7 +48,7 @@ func getNews(url string) (*RSS, error) {
 	}
 
 	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	rss := new(RSS)
 	err = xml.Unmarshal(body, rss)

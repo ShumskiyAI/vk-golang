@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 
@@ -85,7 +84,7 @@ func loginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, _ := ioutil.ReadAll(r.Body)
+	body, _ := io.ReadAll(r.Body)
 	r.Body.Close()
 
 	fd := &LoginForm{}

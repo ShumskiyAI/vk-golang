@@ -42,7 +42,7 @@ func TestItemsHandlerList(t *testing.T) {
 	service.List(w, req)
 
 	resp := w.Result()
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	title := `some item`
 	if !bytes.Contains(body, []byte(title)) {

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 )
 
@@ -21,7 +20,7 @@ var (
 )
 
 func main() {
-	data, err := ioutil.ReadFile("./config.json")
+	data, err := io.ReadFile("./config.json")
 	if err != nil {
 		log.Fatalln("cant read config file:", err)
 	}

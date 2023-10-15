@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -53,7 +52,7 @@ curl -v -X POST -H "Content-Type: application/json" -d '{"id": 2, "user": "rvasi
 
 func uploadRawBody(w http.ResponseWriter, r *http.Request) {
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 
 	p := &Params{}

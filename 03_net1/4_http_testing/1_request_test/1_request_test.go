@@ -3,7 +3,7 @@ package __request_test
 import (
 	"io"
 	// "io"
-	"io/ioutil"
+
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -52,7 +52,7 @@ func TestGetUser(t *testing.T) {
 		}
 
 		resp := w.Result()
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Errorf("[%d] failed to read body: %v", caseNum, err)
 		}
