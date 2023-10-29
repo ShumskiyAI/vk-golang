@@ -7,6 +7,8 @@ type ItemMemoryRepository struct {
 	data   []*Item
 }
 
+var _ ItemsRepo = &ItemMemoryRepository{}
+
 func NewMemoryRepo() *ItemMemoryRepository {
 	return &ItemMemoryRepository{
 		data: make([]*Item, 0, 10),

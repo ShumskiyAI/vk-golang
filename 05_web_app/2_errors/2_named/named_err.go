@@ -22,8 +22,18 @@ func getRemoteResource() error {
 	return nil
 }
 
+func getRemoteResourceAndSomeWork() error {
+	err := getRemoteResource()
+	if err != nil {
+		return fmt.Errorf("getRemoteResource: %w", err)
+	}
+	// do work with it
+	return nil
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	err := getRemoteResource()
+	// err := getRemoteResourceAndSomeWork()
 	if err != nil {
 		fmt.Printf("error happend: %+v\n", err)
 		switch err {
@@ -38,7 +48,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerIs(w http.ResponseWriter, r *http.Request) {
-	err := getRemoteResource()
+	err := getRemoteResourceAndSomeWork()
 	if errors.Is(err, ErrResource) {
 		http.Error(w, "remote resource error", 500)
 		return
