@@ -114,6 +114,25 @@ func newCollectStrings(strs *[]string) func(in, out chan interface{}) {
 	}
 }
 
+// проверяем рейс в SelectUsers
+func TestUsersRace(t *testing.T) {
+	inputData := make([]string, 10000)
+	for i := range inputData {
+		inputData[i] = fmt.Sprintf("bruce.wayne%d@mail.ru", i/10)
+	}
+
+	testResult := []string{}
+	stat = Stat{}
+	RunPipeline(
+		cmd(newCatStrings(inputData, 0)),
+		cmd(SelectUsers),
+		cmd(newCollectStrings(&testResult)),
+	)
+
+	assert.Equal(t, 1000, len(testResult),
+		"итоговый результат отличается от ожидаемого")
+}
+
 // проверяем, что SelectUsers корректно обрабатывает алиасы и не повторяет одних и тех же юзеров
 func TestAlias(t *testing.T) {
 	inputData := []string{
