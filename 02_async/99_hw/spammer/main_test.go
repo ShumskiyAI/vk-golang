@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -198,6 +199,11 @@ func TestParallelPiplines(t *testing.T) {
 	wg.Wait()
 
 	expectedTime := 2700 * time.Millisecond
+	// на винде иногда тормознутые sleep'ы и они могут отрабатывать дольше, чем ожидается.
+	if runtime.GOOS == "windows" {
+		expectedTime += 50 * time.Millisecond
+	}
+
 	timeEnd := time.Since(timeStart)
 	assert.Less(t, timeEnd, expectedTime,
 		"параллельные пайплайны не должны влиять друг на друга. скорость их выполнения зависит от самого медленного")
@@ -276,6 +282,10 @@ func TestTotal(t *testing.T) {
 	)
 
 	expectedTime := 3000 * time.Millisecond
+	// на винде иногда тормознутые sleep'ы и они могут отрабатывать дольше, чем ожидается.
+	if runtime.GOOS == "windows" {
+		expectedTime += 50 * time.Millisecond
+	}
 	timeEnd := time.Since(timeStart)
 	assert.Less(t, timeEnd, expectedTime,
 		"слишком долгоe выполнение. что-то где-то нераспараллелено. должно быть не больше, чем %s, а было %s", timeEnd, expectedTime)
