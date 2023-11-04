@@ -128,12 +128,10 @@ func SendMsgToBot(userID int64, text string) error {
 	// 	}
 	// }`
 
-	atomic.AddUint64(&updID, 1)
-	myUpdID := atomic.LoadUint64(&updID)
+	myUpdID := atomic.AddUint64(&updID, 1)
 
 	// better have it per user, but lazy now
-	atomic.AddUint64(&msgID, 1)
-	myMsgID := atomic.LoadUint64(&msgID)
+	myMsgID := atomic.AddUint64(&msgID, 1)
 
 	user, ok := users[userID]
 	if !ok {
@@ -160,6 +158,72 @@ func SendMsgToBot(userID int64, text string) error {
 					Length: len(strings.Split(text, " ")[0]),
 				},
 			},
+		},
+	}
+	//nolint:errcheck
+	reqData, _ := json.Marshal(upd)
+
+	reqBody := bytes.NewBuffer(reqData)
+	//nolint:errcheck
+	req, _ := http.NewRequest(http.MethodPost, WebhookURL, reqBody)
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	//nolint:govet
+	defer resp.Body.Close()
+	return err
+}
+
+func UpdateLastMessage(userID int64) error {
+
+	//{
+	//	"update_id": 443427246,
+	//	"edited_message": {
+	//	"message_id": 24,
+	//		"from": {
+	//		"id": 337749172,
+	//			"is_bot": false,
+	//			"first_name": "A",
+	//			"username": "test",
+	//			"language_code": "ru"
+	//	},
+	//	"chat": {
+	//		"id": 337749172,
+	//			"first_name": "A",
+	//			"username": "test",
+	//			"type": "private"
+	//	},
+	//	"date": 1699102952,
+	//		"edit_date": 1699102963,
+	//		"text": "12312323"
+	//}
+	//}
+
+	myUpdID := atomic.AddUint64(&updID, 1)
+
+	// better have it per user, but lazy now
+	myMsgID := atomic.LoadUint64(&msgID)
+
+	user, ok := users[userID]
+	if !ok {
+		return fmt.Errorf("no user for %d", userID)
+	}
+
+	upd := &tgbotapi.Update{
+		UpdateID: int(myUpdID),
+		EditedMessage: &tgbotapi.Message{
+			MessageID: int(myMsgID),
+			From:      user,
+			Chat: &tgbotapi.Chat{
+				ID:        user.ID,
+				FirstName: user.FirstName,
+				UserName:  user.UserName,
+				Type:      "private",
+			},
+			Text:     "new_text",
+			Date:     int(time.Now().Unix()),
+			EditDate: int(time.Now().Unix()),
 		},
 	}
 	//nolint:errcheck
@@ -395,6 +459,8 @@ assignee: я
 		},
 	}
 
+	var unexpectedUpdate sync.Once
+
 	for idx, item := range cases {
 
 		tds.Lock()
@@ -408,6 +474,14 @@ assignee: я
 		}
 		// give TDS time to process request
 		time.Sleep(10 * time.Millisecond)
+
+		// bot's updates may be different
+		unexpectedUpdate.Do(func() {
+			err := UpdateLastMessage(item.user)
+			if err != nil {
+				t.Fatalf("%s UpdateMessage error: %s", caseName, err)
+			}
+		})
 
 		tds.Lock()
 		result := reflect.DeepEqual(tds.Answers, item.answers)
