@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/xml"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -23,9 +24,18 @@ git subtree push --prefix 04_net2/05_bot heroku master
 // https://api.telegram.org/bot1953480583:AAEU7eBaZnCUt525oUkCMRCQxK1TJmaoVd4/getUpdates
 
 // ngrok http 8080
-const (
-	BotToken   = "1953480583:AAEU7eBaZnCUt525oUkCMRCQxK1TJmaoVd4"
-	WebhookURL = "https://5872-95-165-1-28.eu.ngrok.io"
+var (
+
+	// хранить секреты в коде плохо, поэтому используем конфиги
+	// "1953480583:AAEU7eBaZnCUt525oUkCMRCQxK1TJmaoVd4"
+	BotToken = flag.String("tg.token", "", "token for telegram")
+
+	// это не секрет, но для простоты тоже выносим под конфиг
+	// "https://5872-95-165-1-28.eu.ngrok.io"
+	WebhookURL = flag.String("tg.webhook", "", "webhook addr for telegram")
+
+	// запуск выглядит так:
+	// go run bot.go -tg.token="1953480583:AAEU7eBaZnCUt525oUkCMRCQxK1TJmaoVd4" -tg.webhook="https://5872-95-165-1-28.eu.ngrok.io"
 )
 
 var rss = map[string]string{
@@ -60,8 +70,10 @@ func getNews(url string) (*RSS, error) {
 }
 
 func main() {
+	flag.Parse()
+
 	rand.Seed(time.Now().UnixNano())
-	bot, err := tgbotapi.NewBotAPI(BotToken)
+	bot, err := tgbotapi.NewBotAPI(*BotToken)
 	if err != nil {
 		log.Fatalf("NewBotAPI failed: %s", err)
 	}
@@ -69,7 +81,7 @@ func main() {
 	bot.Debug = true
 	fmt.Printf("Authorized on account %s\n", bot.Self.UserName)
 
-	wh, err := tgbotapi.NewWebhook(WebhookURL)
+	wh, err := tgbotapi.NewWebhook(*WebhookURL)
 	if err != nil {
 		log.Fatalf("NewWebhook failed: %s", err)
 	}
