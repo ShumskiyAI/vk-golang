@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"gitlab.com/vk-golang/lectures/08_microservices/6_grpc_stream/translit"
 
@@ -28,12 +27,12 @@ func main() {
 	translit.RegisterTransliterationServer(server, tr)
 
 	fmt.Println("starting server at :8081")
-	go server.Serve(lis)
+	server.Serve(lis)
 
-	for {
-		for _, f := range clientsWriter {
-			time.Sleep(time.Second)
-			f("123")
-		}
-	}
+	// for {
+	// 	for _, f := range clientsWriter {
+	// 		time.Sleep(time.Second)
+	// 		f("123")
+	// 	}
+	// }
 }
