@@ -9,6 +9,7 @@ import (
 )
 
 // go run dotenv.go
+// docker run  -v $(pwd):/repo -w /repo --env-file=.env -it golang:latest go run dotenv.go
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {

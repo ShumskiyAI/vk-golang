@@ -15,7 +15,9 @@ var (
 	commentsServices = &AddrList{}
 )
 
-// go run flag.go -comments=true -servers=""
+// go build flag.go
+// ./flag -comments=true -servers="127.0.0.1:8081,127.0.0.1:8082"
+// ./flag --help
 
 func init() {
 	flag.Var(commentsServices, "servers", "Addresses")
@@ -34,6 +36,8 @@ func main() {
 }
 
 type AddrList []string
+
+var _ flag.Value = &AddrList{}
 
 func (v *AddrList) String() string {
 	return fmt.Sprint(*v)

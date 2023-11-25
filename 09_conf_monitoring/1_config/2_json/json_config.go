@@ -4,15 +4,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 )
 
 type Config struct {
 	Comments  bool `json:"comments"`
 	Limit     int
+	Type      Enum
 	Servers   []string
 	CustomCfg struct {
 		Flags int
 	} `json:"tmp"`
+}
+
+const (
+	Unknown Enum = iota
+	Prod
+	Staging
+)
+
+type Enum int
+
+var _ json.Unmarshaler = new(Enum)
+
+func (a *Enum) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	switch strings.ToLower(s) {
+	default:
+		*a = Unknown
+	case "prod":
+		*a = Prod
+	case "staging":
+		*a = Staging
+	}
+
+	return nil
 }
 
 var (
@@ -20,7 +50,7 @@ var (
 )
 
 func main() {
-	data, err := io.ReadFile("./config.json")
+	data, err := os.ReadFile("./config.json")
 	if err != nil {
 		log.Fatalln("cant read config file:", err)
 	}
