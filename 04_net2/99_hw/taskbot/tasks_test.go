@@ -475,7 +475,7 @@ assignee: я
 		// give TDS time to process request
 		time.Sleep(10 * time.Millisecond)
 
-		// бот может присылать разные апдейты. Например, если пользователь отредактирует сообщение, то вы получите update.Message == nil.
+		// бот может получать разные апдейты. Например, если пользователь отредактирует сообщение, то вы получите update.Message == nil.
 		// в этом тесте мы проверяем, что вы предусмотрели это, и добавили проверку на nil. Иначе, словите панику при попытке обратиться к update.Message.*
 		unexpectedUpdate.Do(func() {
 			err := UpdateLastMessage(item.user)
