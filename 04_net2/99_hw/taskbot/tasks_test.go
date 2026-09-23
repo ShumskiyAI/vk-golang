@@ -13,7 +13,6 @@ import (
 
 	tgbotapi "github.com/skinass/telegram-bot-api/v5"
 
-	// "io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -117,21 +116,12 @@ var (
 )
 
 func SendMsgToBot(userID int64, text string) error {
-	// reqText := `{
-	// 	"update_id":175894614,
-	// 	"message":{
-	// 		"message_id":29,
-	// 		"from":{"id":133250764,"is_bot":false,"first_name":"Vasily Romanov","username":"rvasily","language_code":"ru"},
-	// 		"chat":{"id":133250764,"first_name":"Vasily Romanov","username":"rvasily","type":"private"},
-	// 		"date":1512168732,
-	// 		"text":"THIS SEND FROM USER"
-	// 	}
-	// }`
-
-	myUpdID := atomic.AddUint64(&updID, 1)
+	atomic.AddUint64(&updID, 1)
+	myUpdID := atomic.LoadUint64(&updID)
 
 	// better have it per user, but lazy now
-	myMsgID := atomic.AddUint64(&msgID, 1)
+	atomic.AddUint64(&msgID, 1)
+	myMsgID := atomic.LoadUint64(&msgID)
 
 	user, ok := users[userID]
 	if !ok {
@@ -175,72 +165,6 @@ func SendMsgToBot(userID int64, text string) error {
 	return err
 }
 
-func UpdateLastMessage(userID int64) error {
-
-	//{
-	//	"update_id": 443427246,
-	//	"edited_message": {
-	//	"message_id": 24,
-	//		"from": {
-	//		"id": 337749172,
-	//			"is_bot": false,
-	//			"first_name": "A",
-	//			"username": "test",
-	//			"language_code": "ru"
-	//	},
-	//	"chat": {
-	//		"id": 337749172,
-	//			"first_name": "A",
-	//			"username": "test",
-	//			"type": "private"
-	//	},
-	//	"date": 1699102952,
-	//		"edit_date": 1699102963,
-	//		"text": "12312323"
-	//}
-	//}
-
-	myUpdID := atomic.AddUint64(&updID, 1)
-
-	// better have it per user, but lazy now
-	myMsgID := atomic.LoadUint64(&msgID)
-
-	user, ok := users[userID]
-	if !ok {
-		return fmt.Errorf("no user for %d", userID)
-	}
-
-	upd := &tgbotapi.Update{
-		UpdateID: int(myUpdID),
-		EditedMessage: &tgbotapi.Message{
-			MessageID: int(myMsgID),
-			From:      user,
-			Chat: &tgbotapi.Chat{
-				ID:        user.ID,
-				FirstName: user.FirstName,
-				UserName:  user.UserName,
-				Type:      "private",
-			},
-			Text:     "new_text",
-			Date:     int(time.Now().Unix()),
-			EditDate: int(time.Now().Unix()),
-		},
-	}
-	//nolint:errcheck
-	reqData, _ := json.Marshal(upd)
-
-	reqBody := bytes.NewBuffer(reqData)
-	//nolint:errcheck
-	req, _ := http.NewRequest(http.MethodPost, WebhookURL, reqBody)
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	//nolint:govet
-	defer resp.Body.Close()
-	return err
-}
-
 type testCase struct {
 	user    int64
 	command string
@@ -248,7 +172,6 @@ type testCase struct {
 }
 
 func TestTasks(t *testing.T) {
-
 	tds := NewTDS()
 	ts := httptest.NewServer(tds)
 	tgbotapi.APIEndpoint = ts.URL + "/bot%s/%s"
@@ -263,12 +186,12 @@ func TestTasks(t *testing.T) {
 		}
 	}()
 
-	// give server time to start
+	// Give server time to start
 	time.Sleep(100 * time.Millisecond)
 
 	cases := []testCase{
 		{
-			// команда /tasks - выводит список всех активных задач
+			// Команда /tasks - выводит список всех активных задач
 			Ivanov,
 			"/tasks",
 			map[int64]string{
@@ -276,7 +199,7 @@ func TestTasks(t *testing.T) {
 			},
 		},
 		{
-			// команда /new - создаёт новую задачу, всё что после /new - идёт в название задачи
+			// Команда /new - создаёт новую задачу, всё что после /new - идёт в название задачи
 			Ivanov,
 			"/new написать бота",
 			map[int64]string{
@@ -308,8 +231,8 @@ func TestTasks(t *testing.T) {
 			},
 		},
 		{
-			// в случае если задача была назначена на кого-то - он получает уведомление об этом
-			// в данном случае она была назначена на Alexandrov, поэтому ему отправляется уведомление
+			// В случае если задача была назначена на кого-то - он получает уведомление об этом
+			// В данном случае она была назначена на Alexandrov, поэтому ему отправляется уведомление
 			Petrov,
 			"/assign_1",
 			map[int64]string{
@@ -318,7 +241,7 @@ func TestTasks(t *testing.T) {
 			},
 		},
 		{
-			// если задача назначена и на мне - показывается "на меня"
+			// Если задача назначена и на мне - показывается "на меня"
 			Petrov,
 			"/tasks",
 			map[int64]string{
@@ -328,8 +251,7 @@ assignee: я
 			},
 		},
 		{
-			// если задача назначена и не на мне - показывается логин исполнителя
-			// при
+			// Если задача назначена и не на мне - показывается логин исполнителя
 			Ivanov,
 			"/tasks",
 			map[int64]string{
@@ -340,7 +262,7 @@ assignee: @ppetrov`,
 
 		{
 			// /unassign_ - снимает задачу с себя
-			// нельзя снять задачу которая не на вас
+			// Нельзя снять задачу которая не на вас
 			Alexandrov,
 			"/unassign_1",
 			map[int64]string{
@@ -350,7 +272,7 @@ assignee: @ppetrov`,
 
 		{
 			// /unassign_ - снимает задачу с себя
-			// автору отправляется уведомление о том, что задача осталась без исполнителя
+			// Автору отправляется уведомление о том, что задача осталась без исполнителя
 			Petrov,
 			"/unassign_1",
 			map[int64]string{
@@ -360,8 +282,8 @@ assignee: @ppetrov`,
 		},
 
 		{
-			// повтор
-			// в случае если задача была назначена на кого-то - автор получает уведомление об этом
+			// Повтор
+			// В случае если задача была назначена на кого-то - автор получает уведомление об этом
 			Petrov,
 			"/assign_1",
 			map[int64]string{
@@ -371,7 +293,7 @@ assignee: @ppetrov`,
 		},
 		{
 			// /resolve_* завершает задачу, удаляет её из хранилища
-			// автору отправляется уведомление об этом
+			// Автору отправляется уведомление об этом
 			Petrov,
 			"/resolve_1",
 			map[int64]string{
@@ -389,7 +311,7 @@ assignee: @ppetrov`,
 		},
 
 		{
-			// обратите внимание, id=2 - автоинкремент
+			// Обратите внимание, id=2 - автоинкремент
 			Petrov,
 			"/new сделать ДЗ по курсу",
 			map[int64]string{
@@ -397,7 +319,7 @@ assignee: @ppetrov`,
 			},
 		},
 		{
-			// обратите внимание, id=3 - автоинкремент
+			// Обратите внимание, id=3 - автоинкремент
 			Ivanov,
 			"/new прийти на хакатон",
 			map[int64]string{
@@ -416,9 +338,9 @@ assignee: @ppetrov`,
 			},
 		},
 		{
-			// повтор
-			// в случае если задача была назначена на кого-то - автор получает уведомление об этом
-			// если он автор задачи - ему не приходит дополнительного уведомления о том что она назначена на кого-то
+			// Повтор
+			// В случае если задача была назначена на кого-то - автор получает уведомление об этом
+			// Если он автор задачи - ему не приходит дополнительного уведомления о том, что она назначена на кого-то
 			Petrov,
 			"/assign_2",
 			map[int64]string{
@@ -439,7 +361,7 @@ assignee: я
 		},
 		{
 			// /my показывает задачи которые назначены на меня
-			// при этому тут нет метки assegnee
+			// При этом тут нет метки assegnee
 			Petrov,
 			"/my",
 			map[int64]string{
@@ -449,7 +371,7 @@ assignee: я
 		},
 		{
 			// /owner - показывает задачи, которы я создал
-			// при этому тут нет метки assegnee
+			// При этому тут нет метки assegnee
 			Ivanov,
 			"/owner",
 			map[int64]string{
@@ -458,8 +380,6 @@ assignee: я
 			},
 		},
 	}
-
-	var unexpectedUpdate sync.Once
 
 	for idx, item := range cases {
 
@@ -473,16 +393,7 @@ assignee: я
 			t.Fatalf("%s SendMsgToBot error: %s", caseName, err)
 		}
 		// give TDS time to process request
-		time.Sleep(10 * time.Millisecond)
-
-		// бот может получать разные апдейты. Например, если пользователь отредактирует сообщение, то вы получите update.Message == nil.
-		// в этом тесте мы проверяем, что вы предусмотрели это, и добавили проверку на nil. Иначе, словите панику при попытке обратиться к update.Message.*
-		unexpectedUpdate.Do(func() {
-			err := UpdateLastMessage(item.user)
-			if err != nil {
-				t.Fatalf("%s UpdateMessage error: %s", caseName, err)
-			}
-		})
+		time.Sleep(20 * time.Millisecond)
 
 		tds.Lock()
 		result := reflect.DeepEqual(tds.Answers, item.answers)

@@ -1,8 +1,17 @@
 stages:
   - lint
+  - test
 
 golangci-lint:
   image: golangci/golangci-lint:latest
   stage: lint
   script:
     - bash ./run_lint.sh
+
+unit-tests:
+  image: golang:1.27.1-alpine3.24
+  stage: test
+  script:
+    - apk add --no-cache git build-base
+    - export CGO_ENABLED=1
+    - sh ./run_test.sh
