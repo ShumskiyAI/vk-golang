@@ -11,6 +11,10 @@ func main() {
 		но тогда у вас не будет работать через go run main.go
 		очень круто будет сделать построчный ввод команд тут, хотя это и не требуется по заданию
 	*/
+
+	initGame()
+
+	_ = handleCommand("some command")
 }
 
 func initGame() {

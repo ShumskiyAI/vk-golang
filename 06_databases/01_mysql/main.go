@@ -29,15 +29,17 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	items := []*Item{}
 	// Не надо так: SELECT * FROM items
 	rows, err := h.DB.QueryContext(r.Context(), "SELECT id, title, updated FROM items")
-	__err_panic(err)
+	panicOnErr(err)
+
+	// Надо закрывать соединение, иначе будет течь
+	defer rows.Close()
+
 	for rows.Next() {
 		post := &Item{}
 		err = rows.Scan(&post.Id, &post.Title, &post.Updated)
-		__err_panic(err)
+		panicOnErr(err)
 		items = append(items, post)
 	}
-	// надо закрывать соединение, иначе будет течь
-	rows.Close()
 
 	err = h.Tmpl.ExecuteTemplate(w, "index.html", struct {
 		Items []*Item
@@ -59,18 +61,18 @@ func (h *Handler) AddForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
-	// в целям упрощения примера пропущена валидация
+	// В целях упрощения примера пропущена валидация
 	result, err := h.DB.Exec(
 		"INSERT INTO items (`title`, `description`) VALUES (?, ?)",
 		r.FormValue("title"),
 		r.FormValue("description"),
 	)
-	__err_panic(err)
+	panicOnErr(err)
 
 	affected, err := result.RowsAffected()
-	__err_panic(err)
+	panicOnErr(err)
 	lastID, err := result.LastInsertId()
-	__err_panic(err)
+	panicOnErr(err)
 
 	fmt.Println("Insert - RowsAffected", affected, "LastInsertId: ", lastID)
 
@@ -80,14 +82,14 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Edit(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
-	__err_panic(err)
+	panicOnErr(err)
 
 	post := &Item{}
-	// QueryRow сам закрывает коннект
 	row := h.DB.QueryRow("SELECT id, title, updated, description FROM items WHERE id = ?", id)
 
+	// Scan сам закрывает коннект
 	err = row.Scan(&post.Id, &post.Title, &post.Updated, &post.Description)
-	__err_panic(err)
+	panicOnErr(err)
 
 	err = h.Tmpl.ExecuteTemplate(w, "edit.html", post)
 	if err != nil {
@@ -99,17 +101,17 @@ func (h *Handler) Edit(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
-	__err_panic(err)
+	panicOnErr(err)
 
-	// в целям упрощения примера пропущена валидация
+	// В целях упрощения примера пропущена валидация
 	result, err := h.DB.Exec(
 		"UPDATE items SET `title` = ?, `description` = ?, `updated` = ? WHERE id = ?",
 		r.FormValue("title"), r.FormValue("description"), "user", id,
 	)
-	__err_panic(err)
+	panicOnErr(err)
 
 	affected, err := result.RowsAffected()
-	__err_panic(err)
+	panicOnErr(err)
 
 	fmt.Println("Update - RowsAffected", affected)
 
@@ -119,16 +121,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
-	__err_panic(err)
+	panicOnErr(err)
 
 	result, err := h.DB.Exec(
 		"DELETE FROM items WHERE id = ?",
 		id,
 	)
-	__err_panic(err)
+	panicOnErr(err)
 
 	affected, err := result.RowsAffected()
-	__err_panic(err)
+	panicOnErr(err)
 
 	fmt.Println("Delete - RowsAffected", affected)
 
@@ -139,19 +141,20 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
-	// основные настройки к базе
+	// Основные настройки подключения к базе
 	dsn := "root:love@tcp(localhost:3306)/golang?"
-	// указываем кодировку
+	// Указываем кодировку
 	dsn += "&charset=utf8"
-	// отказываемся от prapared statements
-	// параметры подставляются сразу
+	// Отказываемся от prepared statements
+	// Параметры подставляются сразу
 	dsn += "&interpolateParams=true"
 
 	db, err := sql.Open("mysql", dsn)
+	panicOnErr(err)
 
 	db.SetMaxOpenConns(10)
 
-	err = db.Ping() // вот тут будет первое подключение к базе
+	err = db.Ping() // Тут будет первое подключение к базе
 	if err != nil {
 		panic(err)
 	}
@@ -161,7 +164,7 @@ func main() {
 		Tmpl: template.Must(template.ParseGlob("templates/*")),
 	}
 
-	// в целям упрощения примера пропущена авторизация и csrf
+	// В целях упрощения примера пропущена авторизация и csrf
 	r := mux.NewRouter()
 	r.HandleFunc("/", handlers.List).Methods("GET")
 	r.HandleFunc("/items", handlers.List).Methods("GET")
@@ -175,9 +178,9 @@ func main() {
 	fmt.Println(http.ListenAndServe(":8080", r))
 }
 
-// не используйте такой код в прошакшене
-// ошибка должна всегда явно обрабатываться
-func __err_panic(err error) {
+// Не используйте такой код в продакшене
+// Ошибка должна всегда явно обрабатываться
+func panicOnErr(err error) {
 	if err != nil {
 		panic(err)
 	}
