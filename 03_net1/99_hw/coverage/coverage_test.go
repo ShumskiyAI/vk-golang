@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,12 +39,18 @@ func TestSearchServerAndSearchUser(t *testing.T) {
 	}{
 		{
 			"first user sort Name", // test Name
-			1, 0, "", "", 1,        // SearchRequest
-			nil,      // FindUsers - Err
-			[]int{1}, // resp.Users - ID
-			true,     // nextPage
+			5, 0, "", "", 1,        // SearchRequest
+			nil,                      // FindUsers - Err
+			[]int{15, 16, 19, 22, 5}, // resp.Users - ID
+			true,                     // nextPage
 		},
-
+		{
+			"first user sort Name", // test Name
+			5, 0, "on", "Age", 1,   // SearchRequest
+			nil,                    // FindUsers - Err
+			[]int{1, 15, 0, 14, 2}, // resp.Users - ID
+			true,                   // nextPage
+		},
 		// тут ещё будут тестовые кейсы
 	}
 
@@ -57,40 +65,63 @@ func TestSearchServerAndSearchUser(t *testing.T) {
 			})
 
 			if tc.ExpectedErr != err {
-				t.Errorf("ожидаемая ошибка: %w, полученная: %w", tc.ExpectedErr, err)
+				t.Errorf("ожидаемая ошибка: %v, полученная: %v", tc.ExpectedErr, err)
 			}
+
+			if len(resp.Users) != len(tc.expectedIDs) {
+				t.Errorf("ожидаемое количество результатов: %d, полученное: %d", len(tc.expectedIDs), len(resp.Users))
+			}
+			if resp.NextPage != tc.expectedNext {
+				t.Errorf("ожидаемое состояние NextPage: %v, полученное: %v", tc.expectedNext, resp.NextPage)
+			}
+			for i, user := range resp.Users {
+				if user.ID != tc.expectedIDs[i] {
+					t.Errorf("ожидаемый id: %d, полученный: %d", tc.expectedIDs[i], user.ID)
+				}
+			}
+
 		})
 	}
 
-	// -------------
-
-	// file, _ := os.Open(FilePath)
-
-	// -------------
-
-	// sClient := SearchClient{}
-
-	// resp, err := sClient.FindUsers(sReq)
-
-	// -------------
-
-	// req := httptest.NewRequest("GET", "/?limit=1&offset=0&order_field=Age&order_by=1", nil)
-	// w := httptest.NewRecorder()
-
-	// SearchServer(w, req)
-
-	// resp := w.Result()
-	// // body, _ := io.ReadAll(resp.Body)
-
-	// users := make([]User, 0, 1)
-
-	// _ = json.NewDecoder(resp.Body).Decode(&users)
-	// if len(users) != 1 {
-	// 	t.Errorf("users count incorrect")
-	// }
-
-	// server := httptest.NewServer()
 }
+
+// -------------
+
+// file, _ := os.Open(FilePath)
+
+// -------------
+
+// sClient := SearchClient{}
+
+// resp, err := sClient.FindUsers(sReq)
+
+// -------------
+func TestFindIds(t *testing.T) {
+	req := httptest.NewRequest("GET", "/?limit=5&offset=0&order_field=Age&query=on&order_by=1", nil)
+	w := httptest.NewRecorder()
+
+	SearchServer(w, req)
+
+	resp := w.Result()
+	// body, _ := io.ReadAll(resp.Body)
+
+	users := make([]User, 0, 1)
+
+	_ = json.NewDecoder(resp.Body).Decode(&users)
+	if len(users) != 5 {
+		t.Errorf("users count incorrect")
+	}
+	for _, user := range users {
+		fmt.Println(user.ID)
+	}
+
+}
+
+// server := httptest.NewServer()
+
+// ------------
+//
+//
 
 // func nameTest(t *testing.T) {
 // 	testCases := []struct {
