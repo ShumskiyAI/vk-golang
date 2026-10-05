@@ -19,33 +19,54 @@ func TestSearchServerAndSearchUser(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(SearchServer))
 	defer testServer.Close()
 
+	sc := SearchClient{
+		URL:         testServer.URL,
+		AccessToken: "x",
+	}
+
+	testCases := []struct {
+		nameCase     string
+		limit        int
+		offset       int
+		query        string
+		orderField   string
+		orderBy      int
+		ExpectedErr  error
+		expectedIDs  []int // ← какие ID ожидаем в resp.Users (в каком порядке)
+		expectedNext bool  // ← каким должен быть resp.NextPage
+	}{
+		{
+			"first user sort Name", // test Name
+			1, 0, "", "", 1,        // SearchRequest
+			nil,      // FindUsers - Err
+			[]int{1}, // resp.Users - ID
+			true,     // nextPage
+		},
+
+		// тут ещё будут тестовые кейсы
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.nameCase, func(t *testing.T) {
+			resp, err := sc.FindUsers(SearchRequest{
+				Limit:      tc.limit,
+				Offset:     tc.offset,
+				Query:      tc.query,
+				OrderField: tc.orderField,
+				OrderBy:    tc.orderBy,
+			})
+
+			if tc.ExpectedErr != err {
+				t.Errorf("ожидаемая ошибка: %w, полученная: %w", tc.ExpectedErr, err)
+			}
+		})
+	}
+
 	// -------------
 
 	// file, _ := os.Open(FilePath)
 
-	// testCases := []struct {
-	// 	Method         string
-	// 	URL            string
-	// 	ExpectedStatus int
-	// 	ExpectedErr    error
-	// }{
-	// 	{"GET", "/?limit=1&offset=0&order_field=Age&order_by=1", http.StatusOK, nil},
-	// }
-
 	// -------------
-
-	// limit := ""
-	// offset := ""
-	// query := ""
-	// orderField := ""
-	// orderBy := ""
-	// sReq := SearchRequest{
-	// 	Limit:      limit,
-	// 	Offset:     offset,
-	// 	Query:      query,
-	// 	OrderField: orderField,
-	// 	OrderBy:    orderBy,
-	// }
 
 	// sClient := SearchClient{}
 
