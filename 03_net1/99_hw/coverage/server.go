@@ -128,14 +128,6 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 	// -------------- Сортировка --------------
 
-	const (
-		OrderByAsc  = 1
-		OrderByAsIs = 0
-		OrderByDesc = -1
-
-		ErrorBadOrderField = `OrderField invalid`
-	)
-
 	// нужно ли чтобы orderBy был в диапазоне от -1 до 1 ?
 	switch orderBy {
 	case OrderByDesc:
@@ -151,7 +143,7 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
+		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: ErrorBadOrderField})
 		return
 	}
 

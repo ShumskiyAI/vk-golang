@@ -26,6 +26,8 @@ func TestSearchUser(t *testing.T) {
 		AccessToken: "x",
 	}
 
+	// возможно нужно добавить тест на аксес токен и на client timeout
+
 	testCases := []struct {
 		nameCase     string
 		limit        int
@@ -144,88 +146,44 @@ func TestSearchUser(t *testing.T) {
 func TestFindIds(t *testing.T) {
 	testCases := []struct {
 		nameCase     string
-		limit        int
-		offset       int
+		limit        string // int
+		offset       string // int
 		query        string
 		orderField   string
-		orderBy      int
+		orderBy      string // int
 		ExpectedErr  error
 		expectedIDs  []int // ← какие ID ожидаем в resp.Users (в каком порядке)
 		expectedNext bool  // ← каким должен быть resp.NextPage
 	}{
 		{
-			"Success",       // test Name
-			5, 0, "", "", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
+			"Success",             // test Name
+			"5", "0", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
 			nil,                      // FindUsers - Err
 			[]int{15, 16, 19, 22, 5}, // resp.Users - ID
 			true,                     // nextPage
 		},
-		{
-			"Query_match",        // test Name
-			5, 0, "on", "Age", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,                    // FindUsers - Err
-			[]int{1, 15, 0, 14, 2}, // resp.Users - ID
-			true,                   // nextPage
-		},
-		{
-			"Sort_DESC",        // test Name
-			6, 9, "", "Id", -1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,                           // FindUsers - Err
-			[]int{25, 24, 23, 22, 21, 20}, // resp.Users - ID
-			true,                          // nextPage
-		},
-		{
-			"Next_page",        // test Name
-			4, 34, "", "Id", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,       // FindUsers - Err
-			[]int{34}, // resp.Users - ID
-			false,     // nextPage
-		},
-		{
-			"Bad_order_field",   // test Name
-			5, 0, "", "test", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("OrderField test invalid"), // FindUsers - Err
-			[]int{},                               // resp.Users - ID
-			true,                                  // nextPage
-		},
-		{
-			"Negative_limit", // test Name
-			-1, 1, "", "", 0, // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("limit must be > 0"), // FindUsers - Err
-			[]int{},                         // resp.Users - ID
-			true,                            // nextPage
-		},
-		{
-			"Negative_offset", // test Name
-			1, -1, "", "", 0,  // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("offset must be > 0"), // FindUsers - Err
-			[]int{},                          // resp.Users - ID
-			true,                             // nextPage
-		},
-		{
-			"File_not_found", // test Name
-			1, 1, "", "", 0,  // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("SearchServer fatal error"), // FindUsers - Err
-			[]int{},                                // resp.Users - ID
-			true,                                   // nextPage
-		},
 	}
-	req := httptest.NewRequest("GET", "/?limit=4&offset=0&order_field=qwe&query=&order_by=1", nil)
-	w := httptest.NewRecorder()
 
-	SearchServer(w, req)
+	for _, tc := range testCases {
+		t.Run(tc.nameCase, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/?limit=5&offset=0&order_field=&query=&order_by=1", nil)
+			w := httptest.NewRecorder()
 
-	resp := w.Result()
-	// body, _ := io.ReadAll(resp.Body)
+			SearchServer(w, req)
 
-	users := make([]User, 0, 1)
+			resp := w.Result()
+			// body, _ := io.ReadAll(resp.Body)
 
-	_ = json.NewDecoder(resp.Body).Decode(&users)
-	// if len(users) != 5 {
-	// 	t.Errorf("users count incorrect")
-	// }
-	for _, user := range users {
-		fmt.Println(user.ID)
+			users := make([]User, 0, 1)
+
+			_ = json.NewDecoder(resp.Body).Decode(&users)
+			if len(users) != len(tc.expectedIDs) {
+				t.Errorf("users count incorrect")
+			}
+			for _, user := range users {
+				fmt.Println(user.ID)
+			}
+		})
 	}
 
 }
