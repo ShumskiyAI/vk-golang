@@ -127,11 +127,15 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
+
 		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
 		if err != nil {
 			// log.Println("data for JSON is incorrect")
 			return
 		}
+
+		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: ErrorBadOrderField})
+
 		return
 	}
 
