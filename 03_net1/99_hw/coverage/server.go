@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"os"
 	"slices"
@@ -13,7 +14,7 @@ import (
 
 var FilePath = "dataset.xml"
 
-type xmlUser struct {
+type XMLUser struct {
 	ID        int    `xml:"id"`
 	FirstName string `xml:"first_name"`
 	LastName  string `xml:"last_name"`
@@ -24,16 +25,11 @@ type xmlUser struct {
 
 // SearchServer - своего рода внешняя система. Непосредственно занимается поиском данных в файле dataset.xml.
 func SearchServer(w http.ResponseWriter, r *http.Request) {
-	// if r.Method != http.MethodGet{
-
-	// 	return
-	// }
-
-	// token := r.Header.Get("AccessToken")
-	// if token == "" {
-	// 	http.Error(w, "user is unauthorized", http.StatusUnauthorized)
-	// 	return
-	// }
+	token := r.Header.Get("AccessToken")
+	if token == "" {
+		http.Error(w, "user is unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	urlQuery := r.URL.Query()
 
@@ -45,7 +41,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
+		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
+		if err != nil {
+			// log.Println("JSON is incorrect")
+			return
+		}
 		return
 	}
 
@@ -54,7 +54,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if err != nil || limit < 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid limit"})
+		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid limit"})
+		if err != nil {
+			// log.Println("data for JSON is incorrect")
+			return
+		}
 		return
 	}
 
@@ -63,7 +67,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if err != nil || offset < 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid offset"})
+		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid offset"})
+		if err != nil {
+			// log.Println("data for JSON is incorrect")
+			return
+		}
 		return
 	}
 
@@ -81,60 +89,28 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: ErrorBadOrderField})
-		return
-	}
-
-	var root struct {
-		XmlUsers []xmlUser `xml:"row"`
-	}
-	file, err := os.Open(FilePath)
-	if err != nil {
-		http.Error(w, "err open file", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
-
-	err = xml.NewDecoder(file).Decode(&root)
-	if err != nil {
-		http.Error(w, "err parse file", http.StatusInternalServerError)
-		return
-	}
-
-	users := make([]User, len(root.XmlUsers))
-
-	for i, xmlUser := range root.XmlUsers {
-		users[i] = User{
-			ID:     xmlUser.ID,
-			Name:   xmlUser.FirstName + " " + xmlUser.LastName,
-			Age:    xmlUser.Age,
-			About:  xmlUser.About,
-			Gender: xmlUser.Gender,
+		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: ErrorBadOrderField})
+		if err != nil {
+			// log.Println("data for JSON is incorrect")
+			return
 		}
+		return
+	}
+
+	users, err := takeUsersFromXML()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// -------------- QUERY --------------
 
 	queryes := make([]User, 0, len(users)/2)
 	if query != "" {
-		for _, user := range users {
-			if strings.Contains(user.Name, query) || strings.Contains(user.About, query) {
-				queryes = append(queryes, user)
-			}
-		}
-
-		users = queryes
+		users = queryesSwap(queryes, users, query)
 	}
 
 	// -------------- Сортировка --------------
-
-	const (
-		OrderByAsc  = 1
-		OrderByAsIs = 0
-		OrderByDesc = -1
-
-		ErrorBadOrderField = `OrderField invalid`
-	)
 
 	// нужно ли чтобы orderBy был в диапазоне от -1 до 1 ?
 	switch orderBy {
@@ -151,7 +127,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
+		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
+		if err != nil {
+			// log.Println("data for JSON is incorrect")
+			return
+		}
 		return
 	}
 
@@ -161,7 +141,7 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case offset > len(users):
-		users = []User{}
+		users = make([]User, 0)
 
 	case end <= len(users):
 		users = users[offset:end]
@@ -171,5 +151,47 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(&users)
+	err = json.NewEncoder(w).Encode(&users)
+	if err != nil {
+		// log.Println("data for JSON is incorrect")
+		return
+	}
+}
+
+func takeUsersFromXML() ([]User, error) {
+	var root struct {
+		XMLUsers []XMLUser `xml:"row"`
+	}
+	file, err := os.Open(FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("err open file")
+	}
+	defer file.Close()
+
+	err = xml.NewDecoder(file).Decode(&root)
+	if err != nil {
+		return nil, fmt.Errorf("err parse file")
+	}
+
+	users := make([]User, len(root.XMLUsers))
+
+	for i, xmlUser := range root.XMLUsers {
+		users[i] = User{
+			ID:     xmlUser.ID,
+			Name:   xmlUser.FirstName + " " + xmlUser.LastName,
+			Age:    xmlUser.Age,
+			About:  xmlUser.About,
+			Gender: xmlUser.Gender,
+		}
+	}
+	return users, nil
+}
+
+func queryesSwap(queryes, users []User, query string) []User {
+	for _, user := range users {
+		if strings.Contains(user.Name, query) || strings.Contains(user.About, query) {
+			queryes = append(queryes, user)
+		}
+	}
+	return queryes
 }

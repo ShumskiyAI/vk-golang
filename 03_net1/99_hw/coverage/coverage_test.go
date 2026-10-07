@@ -5,27 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
-// SearchServer (server.go) вы будете запускать через тестовый сервер (httptest.NewServer, пример использования в 3/4_http_testing/server_test.go)
-
-// Покрыть тестами метод FindUsers, чтобы покрытие было 90% или более. Тесты писать в coverage_test.go.
-
-// Тесты так же должны обеспечить 90%-е покрытие SearchServer. Там придётся подменять в некоторых случаях путь до файла (имя файла можно сделать глобальной переменной), чтобы ошибку получить, или же сам файл.
-
-// Тесты писать полноценное, т.е. они реально должны проверять что другая сторона вернула корректный ответ, а не просто покрытие обеспечилось.
-// Это значит, что вы должны реально искать по файлу, реально возвращать результаты, а в тесте смотреть что вернулось то, что вы забили в тест. В сравниваемых тестовых данных жестко указать записи не считается хардкодом.
-
 func TestSearchUser(t *testing.T) {
-	testServer := httptest.NewServer(http.HandlerFunc(SearchServer))
-	defer testServer.Close()
-
-	sc := SearchClient{
-		URL:         testServer.URL,
-		AccessToken: "x",
-	}
-
 	testCases := []struct {
 		nameCase     string
 		limit        int
@@ -34,12 +20,12 @@ func TestSearchUser(t *testing.T) {
 		orderField   string
 		orderBy      int
 		ExpectedErr  error
-		expectedIDs  []int // ← какие ID ожидаем в resp.Users (в каком порядке)
-		expectedNext bool  // ← каким должен быть resp.NextPage
+		expectedIDs  []int
+		expectedNext bool
 	}{
 		{
-			"Success",       // test Name
-			5, 0, "", "", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
+			"Success",           // test Name
+			5, 0, "", "Name", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
 			nil,                      // FindUsers - Err
 			[]int{15, 16, 19, 22, 5}, // resp.Users - ID
 			true,                     // nextPage
@@ -52,11 +38,11 @@ func TestSearchUser(t *testing.T) {
 			true,                   // nextPage
 		},
 		{
-			"Sort_DESC",        // test Name
-			6, 9, "", "Id", -1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,                           // FindUsers - Err
-			[]int{25, 24, 23, 22, 21, 20}, // resp.Users - ID
-			true,                          // nextPage
+			"Sort_DESC",      // test Name
+			6, 9, "", "", -1, // SearchRequest{limit, offset, query, orderField, orderBy}
+			nil,                         // FindUsers - Err
+			[]int{20, 7, 25, 34, 21, 6}, // resp.Users - ID
+			true,                        // nextPage
 		},
 		{
 			"Next_page",        // test Name
@@ -71,6 +57,13 @@ func TestSearchUser(t *testing.T) {
 			fmt.Errorf("OrderField test invalid"), // FindUsers - Err
 			[]int{},                               // resp.Users - ID
 			true,                                  // nextPage
+		},
+		{
+			"Limit_over_25",    // test Name
+			30, 0, "", "Id", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
+			nil, // FindUsers - Err
+			[]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}, // resp.Users - ID
+			true, // nextPage
 		},
 		{
 			"Negative_limit", // test Name
@@ -95,10 +88,20 @@ func TestSearchUser(t *testing.T) {
 		},
 	}
 
+	testServer := httptest.NewServer(http.HandlerFunc(SearchServer))
+	defer testServer.Close()
+
+	sc := SearchClient{
+		URL:         testServer.URL,
+		AccessToken: "x",
+	}
+
 	for _, tc := range testCases {
 		t.Run(tc.nameCase, func(t *testing.T) {
-			if tc.nameCase == "File_not_found" {
-				FilePath = "qwerty.xml" // проверка на то, что файл не будет найден
+			if tc.nameCase == "File_not_found" { // проверка на то, что файл не будет найден
+				old := FilePath
+				FilePath = "qwerty.xml"
+				defer func() { FilePath = old }()
 			}
 
 			resp, err := sc.FindUsers(SearchRequest{
@@ -108,6 +111,7 @@ func TestSearchUser(t *testing.T) {
 				OrderField: tc.orderField,
 				OrderBy:    tc.orderBy,
 			})
+
 			if tc.ExpectedErr != nil {
 				if tc.ExpectedErr.Error() != err.Error() {
 					t.Errorf("expected err: %v, got: %v", tc.ExpectedErr, err)
@@ -139,117 +143,201 @@ func TestSearchUser(t *testing.T) {
 	}
 }
 
-// file, _ := os.Open(FilePath)
+func TestFindUsers_NetErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		statusCode int
+		body       string
+		sleep      time.Duration
+		wantErr    string
+	}{
+		{"unauthorized", http.StatusUnauthorized, "", 0, "bad AccessToken"},
+		{"500", http.StatusInternalServerError, "", 0, "SearchServer fatal error"},
+		{"400_with_bad_json", http.StatusBadRequest, "not json", 0, "cant unpack error json"},
+		{"400_with_unknown_error", http.StatusBadRequest, `{"Error":"oops"}`, 0, "unknown bad request error"},
+		{"200_with_bad_json", http.StatusOK, "not an array", 0, "cant unpack result json"},
+		{"timeout", http.StatusOK, "{}", 2 * time.Second, "timeout for"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.sleep > 0 {
+					time.Sleep(tc.sleep)
+				}
+				w.WriteHeader(tc.statusCode)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer ts.Close()
+			c := &SearchClient{URL: ts.URL, AccessToken: "x"}
+			_, err := c.FindUsers(SearchRequest{Limit: 5, OrderBy: 1, OrderField: "Id"})
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("want error containing %q, got %q", tc.wantErr, err.Error())
+			}
+		})
+	}
+}
 
-func TestFindIds(t *testing.T) {
+func TestSearchServer(t *testing.T) {
 	testCases := []struct {
-		nameCase     string
-		limit        int
-		offset       int
-		query        string
-		orderField   string
-		orderBy      int
-		ExpectedErr  error
-		expectedIDs  []int // ← какие ID ожидаем в resp.Users (в каком порядке)
-		expectedNext bool  // ← каким должен быть resp.NextPage
+		nameCase           string
+		limit              string // int
+		offset             string // int
+		query              string
+		orderField         string
+		orderBy            string // int
+		ExpectedStatusCode int
+		expectedIDs        []int // какие ID ожидаем в resp.Users (в каком порядке)
 	}{
 		{
-			"Success",       // test Name
-			5, 0, "", "", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,                      // FindUsers - Err
+			"Success",             // test Name
+			"5", "0", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			200,                      // Status Code
 			[]int{15, 16, 19, 22, 5}, // resp.Users - ID
-			true,                     // nextPage
 		},
 		{
-			"Query_match",        // test Name
-			5, 0, "on", "Age", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,                    // FindUsers - Err
-			[]int{1, 15, 0, 14, 2}, // resp.Users - ID
-			true,                   // nextPage
+			"Big_offset",           // test Name
+			"1", "76", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			200, // Status Code
+			[]int{},
 		},
 		{
-			"Sort_DESC",        // test Name
-			6, 9, "", "Id", -1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,                           // FindUsers - Err
-			[]int{25, 24, 23, 22, 21, 20}, // resp.Users - ID
-			true,                          // nextPage
+			"Negative_offset",       // test Name
+			"1", "-76", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			400, // Status Code
+			[]int{},
 		},
 		{
-			"Next_page",        // test Name
-			4, 34, "", "Id", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			nil,       // FindUsers - Err
-			[]int{34}, // resp.Users - ID
-			false,     // nextPage
+			"Bad_offset",             // test Name
+			"1", "text", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			400, // Status Code
+			[]int{},
 		},
 		{
-			"Bad_order_field",   // test Name
-			5, 0, "", "test", 1, // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("OrderField test invalid"), // FindUsers - Err
-			[]int{},                               // resp.Users - ID
-			true,                                  // nextPage
+			"Big_limit",              // test Name
+			"60", "0", "", "Id", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			200, // Status Code
+			[]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34},
 		},
 		{
-			"Negative_limit", // test Name
-			-1, 1, "", "", 0, // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("limit must be > 0"), // FindUsers - Err
-			[]int{},                         // resp.Users - ID
-			true,                            // nextPage
+			"Negative_limit",        // test Name
+			"-10", "1", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			400, // Status Code
+			[]int{},
 		},
 		{
-			"Negative_offset", // test Name
-			1, -1, "", "", 0,  // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("offset must be > 0"), // FindUsers - Err
-			[]int{},                          // resp.Users - ID
-			true,                             // nextPage
+			"Bad_limit",              // test Name
+			"text", "5", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			400, // Status Code
+			[]int{},
 		},
 		{
-			"File_not_found", // test Name
-			1, 1, "", "", 0,  // SearchRequest{limit, offset, query, orderField, orderBy}
-			fmt.Errorf("SearchServer fatal error"), // FindUsers - Err
-			[]int{},                                // resp.Users - ID
-			true,                                   // nextPage
+			"Bad_order_field",        // test Name
+			"5", "0", "", "qwe", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			400, // Status Code
+			[]int{},
+		},
+		{
+			"Bad_order_by",         // test Name
+			"5", "0", "", "", "10", // SearchRequest{limit, offset, query, orderField, orderBy}
+			400, // Status Code
+			[]int{},
+		},
+		{
+			"Text_order_by",          // test Name
+			"5", "0", "", "", "text", // SearchRequest{limit, offset, query, orderField, orderBy}
+			400, // Status Code
+			[]int{},
+		},
+		{
+			"Miss_access_token",   // test Name
+			"5", "0", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
+			401, // Status Code
+			[]int{},
 		},
 	}
-	req := httptest.NewRequest("GET", "/?limit=4&offset=0&order_field=qwe&query=&order_by=1", nil)
-	w := httptest.NewRecorder()
+	for _, tc := range testCases {
+		url := fmt.Sprintf("/?limit=%s&offset=%s&order_field=%s&query=%s&order_by=%s", tc.limit, tc.offset, tc.orderField, tc.query, tc.orderBy)
+		t.Run(tc.nameCase, func(t *testing.T) {
+			req := httptest.NewRequest("GET", url, nil)
+			w := httptest.NewRecorder()
 
-	SearchServer(w, req)
+			if tc.nameCase != "Miss_access_token" {
+				req.Header.Set("AccessToken", "token")
+			}
 
-	resp := w.Result()
-	// body, _ := io.ReadAll(resp.Body)
+			SearchServer(w, req)
 
-	users := make([]User, 0, 1)
+			resp := w.Result()
+			defer resp.Body.Close()
 
-	_ = json.NewDecoder(resp.Body).Decode(&users)
-	// if len(users) != 5 {
-	// 	t.Errorf("users count incorrect")
-	// }
-	for _, user := range users {
-		fmt.Println(user.ID)
+			statusCode := resp.StatusCode
+			if statusCode != tc.ExpectedStatusCode {
+				t.Errorf("expected status code: %d, got: %d", tc.ExpectedStatusCode, statusCode)
+				return
+			}
+
+			users := make([]User, 0, 26)
+
+			err := json.NewDecoder(resp.Body).Decode(&users)
+			if err != nil {
+				t.Log("err decode json")
+				return
+			}
+
+			if len(users) != len(tc.expectedIDs) {
+				t.Errorf("users count incorrect")
+				return
+			}
+
+			for i, user := range users {
+				if user.ID != tc.expectedIDs[i] {
+					t.Errorf("expected ID of User: %d, got: %d", tc.expectedIDs[i], user.ID)
+					return
+				}
+			}
+
+		})
 	}
 
 }
 
-// func nameTest(t *testing.T) {
-// 	testCases := []struct {
-// 		ID   int
-// 		Name string
-// 	}{
-// 		{1, ""},
-// 	}
-// 	for _, tc := range testCases {
-// 		t.Run(tc.Name, func(t *testing.T) {
-// 		})
-// 	}
-// }
+func TestSearchServer_BadXML(t *testing.T) {
+	tmp, err := os.CreateTemp("", "bad-*.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmp.Name())
 
-// // 2. Прямые тесты сервера — для негативных параметров, которые клиент не пошлёт
-// func TestSearchServer_InvalidLimit(t *testing.T) { /* httptest.NewRecorder */ }
-// func TestSearchServer_InvalidOffset(t *testing.T) { ... }
-// func TestSearchServer_InvalidOrderBy(t *testing.T) { ... }
-// func TestSearchServer_OffsetOutOfRange(t *testing.T) { ... }
+	_, err = tmp.WriteString(`
+	<root>
+		<row>
+			<id>not-an-int</id>
+		</row>
+	</root>
+	`)
 
-// // 3. Прямые тесты клиента — без сервера или с фейковым хендлером
-// func TestFindUsers_NegativeLimit(t *testing.T) { ... }
-// func TestFindUsers_NegativeOffset(t *testing.T) { ... }
-// func TestFindUsers_BadJSON(t *testing.T) { /* свой http.HandlerFunc */ }
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp.Close()
+
+	old := FilePath
+	FilePath = tmp.Name()
+	defer func() { FilePath = old }()
+
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+	defer ts.Close()
+
+	c := &SearchClient{URL: ts.URL, AccessToken: "x"}
+	_, err = c.FindUsers(SearchRequest{Limit: 5, OrderBy: 1, OrderField: "Id"})
+
+	if err == nil {
+		t.Fatal("expected: error, got: nil")
+	}
+	if !strings.Contains(err.Error(), "SearchServer fatal error") {
+		t.Errorf(`want: "SearchServer fatal error", got: %q`, err.Error())
+	}
+}

@@ -40,5 +40,4 @@ func TestGetUser(t *testing.T) {
 /*
 	go test -coverprofile=cover.out
 	go tool cover -html=cover.out -o cover.html
-
 */
