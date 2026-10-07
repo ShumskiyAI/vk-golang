@@ -12,7 +12,6 @@ import (
 )
 
 func TestSearchUser(t *testing.T) {
-
 	testCases := []struct {
 		nameCase     string
 		limit        int
@@ -183,7 +182,6 @@ func TestFindUsers_NetErrors(t *testing.T) {
 
 func TestSearchServer(t *testing.T) {
 	testCases := []struct {
-<<<<<<< HEAD
 		nameCase           string
 		limit              string // int
 		offset             string // int
@@ -192,29 +190,13 @@ func TestSearchServer(t *testing.T) {
 		orderBy            string // int
 		ExpectedStatusCode int
 		expectedIDs        []int // какие ID ожидаем в resp.Users (в каком порядке)
-=======
-		nameCase     string
-		limit        string // int
-		offset       string // int
-		query        string
-		orderField   string
-		orderBy      string // int
-		ExpectedErr  error
-		expectedIDs  []int // ← какие ID ожидаем в resp.Users (в каком порядке)
-		expectedNext bool  // ← каким должен быть resp.NextPage
->>>>>>> d593b196f5c232e53217b47cbe701bb4e49ac161
 	}{
 		{
 			"Success",             // test Name
 			"5", "0", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
-<<<<<<< HEAD
 			200,                      // Status Code
-=======
-			nil,                      // FindUsers - Err
->>>>>>> d593b196f5c232e53217b47cbe701bb4e49ac161
 			[]int{15, 16, 19, 22, 5}, // resp.Users - ID
 		},
-<<<<<<< HEAD
 		{
 			"Big_offset",           // test Name
 			"1", "76", "", "", "1", // SearchRequest{limit, offset, query, orderField, orderBy}
@@ -285,19 +267,10 @@ func TestSearchServer(t *testing.T) {
 			if tc.nameCase != "Miss_access_token" {
 				req.Header.Set("AccessToken", "token")
 			}
-=======
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.nameCase, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/?limit=5&offset=0&order_field=&query=&order_by=1", nil)
-			w := httptest.NewRecorder()
->>>>>>> d593b196f5c232e53217b47cbe701bb4e49ac161
 
 			SearchServer(w, req)
 
 			resp := w.Result()
-<<<<<<< HEAD
 			defer resp.Body.Close()
 
 			statusCode := resp.StatusCode
@@ -326,19 +299,6 @@ func TestSearchServer(t *testing.T) {
 				}
 			}
 
-=======
-			// body, _ := io.ReadAll(resp.Body)
-
-			users := make([]User, 0, 1)
-
-			_ = json.NewDecoder(resp.Body).Decode(&users)
-			if len(users) != len(tc.expectedIDs) {
-				t.Errorf("users count incorrect")
-			}
-			for _, user := range users {
-				fmt.Println(user.ID)
-			}
->>>>>>> d593b196f5c232e53217b47cbe701bb4e49ac161
 		})
 	}
 

@@ -130,7 +130,7 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
 		if err != nil {
-			// log.Println("data for JSON is incorrect")
+
 			return
 		}
 
