@@ -25,12 +25,6 @@ type XMLUser struct {
 
 // SearchServer - своего рода внешняя система. Непосредственно занимается поиском данных в файле dataset.xml.
 func SearchServer(w http.ResponseWriter, r *http.Request) {
-	token := r.Header.Get("AccessToken")
-	if token == "" {
-		http.Error(w, "user is unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	urlQuery := r.URL.Query()
 
 	// OrderField string - работает по полям Id, Age, Name, если пустой - то возвращаем по Name, если что-то другое - SearchServer ругается ошибкой. Name - это first_name + last_name из xml.
@@ -99,15 +93,21 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 	users, err := takeUsersFromXML()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: err.Error()})
+		if err != nil {
+			// log.Println("data for JSON is incorrect")
+			return
+		}
 		return
 	}
 
 	// -------------- QUERY --------------
 
-	queryes := make([]User, 0, len(users)/2)
 	if query != "" {
-		users = queryesSwap(queryes, users, query)
+
+		users = queryesSwap(users, query)
 	}
 
 	// -------------- Сортировка --------------
@@ -127,15 +127,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-
 		err = json.NewEncoder(w).Encode(SearchErrorResponse{Error: "invalid order_by"})
 		if err != nil {
-
+			// log.Println("data for JSON is incorrect")
 			return
 		}
-
-		_ = json.NewEncoder(w).Encode(SearchErrorResponse{Error: ErrorBadOrderField})
-
 		return
 	}
 
@@ -168,13 +164,13 @@ func takeUsersFromXML() ([]User, error) {
 	}
 	file, err := os.Open(FilePath)
 	if err != nil {
-		return nil, fmt.Errorf("err open file")
+		return nil, fmt.Errorf("err open file: %w", err)
 	}
 	defer file.Close()
 
 	err = xml.NewDecoder(file).Decode(&root)
 	if err != nil {
-		return nil, fmt.Errorf("err parse file")
+		return nil, fmt.Errorf("err parse file: %w", err)
 	}
 
 	users := make([]User, len(root.XMLUsers))
@@ -191,9 +187,13 @@ func takeUsersFromXML() ([]User, error) {
 	return users, nil
 }
 
-func queryesSwap(queryes, users []User, query string) []User {
+func queryesSwap(users []User, query string) []User {
+	queryes := make([]User, 0, len(users)/2)
+
+	query = strings.ToLower(query)
+
 	for _, user := range users {
-		if strings.Contains(user.Name, query) || strings.Contains(user.About, query) {
+		if strings.Contains(strings.ToLower(user.Name), query) || strings.Contains(strings.ToLower(user.About), query) {
 			queryes = append(queryes, user)
 		}
 	}

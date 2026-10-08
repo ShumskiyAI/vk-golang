@@ -50,16 +50,19 @@ const (
 )
 
 type SearchRequest struct {
-	Limit      int    // offset и limit позволяют получать отсортированный список юзеров пачками с индекса offset не более limit штук.
+	Limit      int
 	Offset     int    // Можно учесть после сортировки
-	Query      string // подстрока в 1 из полей. Ищет по полям Name и About. Если query пустой, то делаем только сортировку, т.е. возвращаем все записи
-	OrderField string // работает по полям Id, Age, Name, если пустой - то возвращаем по Name, если что-то другое - SearchServer ругается ошибкой. Name - это first_name + last_name из xml.
-	OrderBy    int    // задает направление сортировки (по полю переданному в order_field) или ее отсутствие (OrderByAsIs). 1 по возрастанию, 0 как встретилось, -1 по убыванию
+	Query      string // подстрока в 1 из полей
+	OrderField string
+	//  1 по возрастанию, 0 как встретилось, -1 по убыванию
+	OrderBy int
 }
 
 type SearchClient struct {
-	AccessToken string // Токен, по которому происходит авторизация на внешней системе, уходит туда через хедер
-	URL         string // Урл внешней системы, куда идти
+	// Токен, по которому происходит авторизация на внешней системе, уходит туда через хедер
+	AccessToken string
+	// Урл внешней системы, куда идти
+	URL string
 }
 
 // FindUsers отправляет запрос во внешнюю систему, которая непосредственно ищет пользователей
@@ -97,7 +100,6 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 		return nil, fmt.Errorf("unknown error %s", err)
 	}
 	defer resp.Body.Close()
-
 	body, _ := io.ReadAll(resp.Body) //nolint:errcheck
 
 	switch resp.StatusCode {
@@ -112,7 +114,7 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 			return nil, fmt.Errorf("cant unpack error json: %s", err)
 		}
 		if errResp.Error == ErrorBadOrderField {
-			return nil, fmt.Errorf("OrderField %s invalid", req.OrderField)
+			return nil, fmt.Errorf("OrderFeld %s invalid", req.OrderField)
 		}
 		return nil, fmt.Errorf("unknown bad request error: %s", errResp.Error)
 	}
