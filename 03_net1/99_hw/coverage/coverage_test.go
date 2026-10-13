@@ -93,16 +93,11 @@ func TestSearchUser(t *testing.T) {
 
 	sc := SearchClient{
 		URL:         testServer.URL,
-		AccessToken: "x",
+		AccessToken: "token",
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.nameCase, func(t *testing.T) {
-			// if tc.nameCase == "File_not_found" { // проверка на то, что файл не будет найден
-			// 	old := FilePath
-			// 	FilePath = "qwerty.xml"
-			// 	defer func() { FilePath = old }()
-			// }
 
 			resp, err := sc.FindUsers(SearchRequest{
 				Limit:      tc.limit,
