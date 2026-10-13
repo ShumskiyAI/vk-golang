@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	tgbotapi "github.com/skinass/telegram-bot-api/v5"
@@ -21,15 +22,18 @@ var (
 	WebhookURL = "https://525f2cb5.ngrok.io"
 )
 
-// Пустой список задач - - - - - - - - -|| Нет задач
-// Создание задачи - - - - - - - - - - -|| Задача "написать бота" создана, id=1
-// Задача назначена на тебя- - - - - - -|| Задача "написать бота" назначена на вас
-// Задача назначена на другого (автору) || Задача "написать бота" назначена на @aalexandrov
-// Снятие задачи - - - - - - - - - - - -|| Принято
-// Автору при снятии - - - - - - - - - -|| Задача "написать бота" осталась без исполнителя
-// Выполнение -  - - - - - - - - - - - -|| Задача "написать бота" выполнена
-// Автору при выполнении - - - - - - - -|| Задача "написать бота" выполнена @ppetrov
-// Снятие чужой задачи - - - - - - - - -|| Задача не на вас
+// /tasks 		 	  || Пустой список задач - - - - - - - - -|| Нет задач
+// /new	  		 	  || Создание задачи - - - - - - - - - - -|| Задача "написать бота" создана, id=1
+
+// /assign_$ID 	 	  || Задача назначена на тебя- - - - - - -|| Задача "написать бота" назначена на вас
+// /assign_$ID 	 	  || Задача назначена на другого (автору) || Задача "написать бота" назначена на @aalexandrov
+
+// /unassign_$ID 	  || Снятие задачи - - - - - - - - - - - -|| Принято
+// /unassign_$ID 	  || Автору при снятии - - - - - - - - - -|| Задача "написать бота" осталась без исполнителя
+// /unassign_$ID 	  || Снятие чужой задачи - - - - - - - - -|| Задача не на вас
+
+// /handleResolveTask || Выполнение -  - - - - - - - - - - - -|| Задача "написать бота" выполнена
+// /handleResolveTask || Автору при выполнении - - - - - - - -|| Задача "написать бота" выполнена @ppetrov
 
 type Task struct {
 	ID               int64
@@ -55,7 +59,7 @@ func NewBot() *Bot {
 }
 
 // /tasks
-func (b Bot) taskList() []Task {
+func (b Bot) handleTaskList() []Task {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	tasks := make([]Task, len(b.Tasks))
@@ -64,7 +68,7 @@ func (b Bot) taskList() []Task {
 }
 
 // /new XXX YYY ZZZ - создаёт новую задачу
-func (b *Bot) createTask(title string, owner *tgbotapi.User) *Task {
+func (b *Bot) handleCreateTask(title string, owner *tgbotapi.User) *Task {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	task := &Task{
@@ -80,23 +84,24 @@ func (b *Bot) createTask(title string, owner *tgbotapi.User) *Task {
 }
 
 // /assign_$ID - делает пользователя исполнителем задачи
-func (b *Bot) updateAssignee(taskID, assigneeID int64, assigneeNickname string) *Task {
+func (b *Bot) handleUpdateAssignee(taskID, assigneeID int64, assigneeNickname string) (*Task, *Task) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	for i, task := range b.Tasks {
 		if task.ID == taskID {
+			old := task
 			b.Tasks[i].AssigneeID = assigneeID
 			b.Tasks[i].AssigneeNickname = assigneeNickname
-			return &b.Tasks[i]
+			return &b.Tasks[i], &old
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 // /unassign_$ID - снимает задачу с текущего исполнителя
-func (b *Bot) unassign(taskID, myID int64) (*Task, error) {
+func (b *Bot) handleUnassign(taskID, myID int64) (*Task, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for i, task := range b.Tasks {
@@ -113,7 +118,7 @@ func (b *Bot) unassign(taskID, myID int64) (*Task, error) {
 }
 
 // /resolve_$ID - выполняет задачу, удаляет её из списка
-func (b *Bot) resolveTask(taskID int64) *Task {
+func (b *Bot) handleResolveTask(taskID int64) *Task {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for i, task := range b.Tasks {
@@ -128,7 +133,7 @@ func (b *Bot) resolveTask(taskID int64) *Task {
 }
 
 // /my - показывает задачи, которые назначены на меня
-func (b Bot) meAssignee(myID int64) []Task {
+func (b Bot) handleMeAssignee(myID int64) []Task {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	TasksOnMe := make([]Task, 0)
@@ -147,7 +152,7 @@ func (b Bot) meAssignee(myID int64) []Task {
 }
 
 // /owner - показывает задачи, которые были созданы мной. Подробности форматирования смотрите в тестах.
-func (b Bot) meOwner(myID int64) []Task {
+func (b Bot) handleMeOwner(myID int64) []Task {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	myTasks := make([]Task, 0)
@@ -168,17 +173,46 @@ func (b Bot) meOwner(myID int64) []Task {
 func (b *Bot) handleMessage(bot *tgbotapi.BotAPI, upd tgbotapi.Update) {
 	msg := upd.Message
 	if msg == nil {
-		log.Fatalf("сообщение из бота = nil")
+		log.Println("сообщение из бота = nil")
+		return
 	}
 
 	user := msg.From
 	chatID := msg.Chat.ID
 	text := msg.Text
 
-	switch {
-	case text == "":
+	send := func(text string) {
+		if _, err := bot.Send(tgbotapi.NewMessage(chatID, text)); err != nil {
+			log.Fatalln("ошибка отправки")
+		}
 	}
 
+	switch {
+	case text == "/tasks":
+		tasks := b.handleTaskList()
+		send("") // форматированный вывод
+		_ = tasks
+
+	case strings.HasPrefix(text, "/new "):
+		title := strings.TrimPrefix(text, "/new ")
+		b.handleCreateTask(title, user)
+		send("") // форматированный вывод
+
+	case strings.HasPrefix(text, "/assign"):
+
+	case strings.HasPrefix(text, "/unassign"):
+
+	case strings.HasPrefix(text, "/resolve"):
+
+	case strings.HasPrefix(text, "/my"):
+
+	case strings.HasPrefix(text, "/owner"):
+		// /assign_$ID
+		// /unassign_$ID
+		// /resolve_$ID
+		// /my
+		// /owner
+	}
 }
 
 func startTaskBot(ctx context.Context) error {
@@ -202,7 +236,9 @@ func startTaskBot(ctx context.Context) error {
 	updates := bot.ListenForWebhook("/")
 
 	go func() {
-		log.Fatalln("http err:", http.ListenAndServe(":8080", nil))
+		if err := http.ListenAndServe(":8081", nil); err != nil && err != http.ErrServerClosed {
+			log.Println("http server error:", err)
+		}
 	}()
 
 	b := NewBot()
@@ -214,7 +250,7 @@ func startTaskBot(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("бот завершён из-за закрытия контекста")
+			log.Println("бот завершён из-за отмены контекста")
 			return nil
 		case upd, ok := <-updates:
 			if !ok {
