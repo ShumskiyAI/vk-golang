@@ -1,12 +1,14 @@
 package main
 
-// сюда писать код
-
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -14,26 +16,14 @@ import (
 )
 
 var (
-	// @BotFather в телеграме даст вам токен. Если захотите потыкать своего бота через телегу - используйте именно его
-	BotToken = "XXX"
-
-	// Урл, в который будет стучаться телега при получении сообщения от пользователя.
-	// Может быть как айпишником личной виртуалки, так и просто выдан сервисом для деплоя
+	BotToken   = "XXX"
 	WebhookURL = "https://525f2cb5.ngrok.io"
 )
 
-// /tasks 		 	  || Пустой список задач - - - - - - - - -|| Нет задач
-// /new	  		 	  || Создание задачи - - - - - - - - - - -|| Задача "написать бота" создана, id=1
-
-// /assign_$ID 	 	  || Задача назначена на тебя- - - - - - -|| Задача "написать бота" назначена на вас
-// /assign_$ID 	 	  || Задача назначена на другого (автору) || Задача "написать бота" назначена на @aalexandrov
-
-// /unassign_$ID 	  || Снятие задачи - - - - - - - - - - - -|| Принято
-// /unassign_$ID 	  || Автору при снятии - - - - - - - - - -|| Задача "написать бота" осталась без исполнителя
-// /unassign_$ID 	  || Снятие чужой задачи - - - - - - - - -|| Задача не на вас
-
-// /handleResolveTask || Выполнение -  - - - - - - - - - - - -|| Задача "написать бота" выполнена
-// /handleResolveTask || Автору при выполнении - - - - - - - -|| Задача "написать бота" выполнена @ppetrov
+var (
+	ErrTaskNotFound = errors.New("task not found")
+	ErrTaskNotOnYou = errors.New("task not on you")
+)
 
 type Task struct {
 	ID               int64
@@ -45,135 +35,170 @@ type Task struct {
 }
 
 type Bot struct {
-	Tasks  []Task
 	mu     *sync.RWMutex
+	tasks  []Task
 	nextID int64
 }
 
 func NewBot() *Bot {
 	return &Bot{
-		Tasks:  make([]Task, 0),
 		mu:     &sync.RWMutex{},
+		tasks:  make([]Task, 0),
 		nextID: 1,
 	}
 }
 
-// /tasks
-func (b Bot) handleTaskList() []Task {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	tasks := make([]Task, len(b.Tasks))
-	copy(tasks, b.Tasks)
-	return tasks
-}
-
-// /new XXX YYY ZZZ - создаёт новую задачу
-func (b *Bot) handleCreateTask(title string, owner *tgbotapi.User) *Task {
+func (b *Bot) createTask(title string, ownerID int64, ownerNickname string) Task {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	task := &Task{
+
+	task := Task{
 		ID:            b.nextID,
 		Title:         title,
-		OwnerID:       owner.ID,
-		OwnerNickname: owner.UserName,
+		OwnerID:       ownerID,
+		OwnerNickname: ownerNickname,
 	}
-	b.Tasks = append(b.Tasks, *task)
+	b.tasks = append(b.tasks, task)
 	b.nextID++
 
 	return task
 }
 
-// /assign_$ID - делает пользователя исполнителем задачи
-func (b *Bot) handleUpdateAssignee(taskID, assigneeID int64, assigneeNickname string) (*Task, *Task) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *Bot) listTasks() []Task {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-	for i, task := range b.Tasks {
-		if task.ID == taskID {
-			old := task
-			b.Tasks[i].AssigneeID = assigneeID
-			b.Tasks[i].AssigneeNickname = assigneeNickname
-			return &b.Tasks[i], &old
-		}
-	}
+	out := make([]Task, len(b.tasks))
+	copy(out, b.tasks)
 
-	return nil, nil
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out
 }
 
-// /unassign_$ID - снимает задачу с текущего исполнителя
-func (b *Bot) handleUnassign(taskID, myID int64) (*Task, error) {
+func (b *Bot) assign(taskID, assigneeID int64, assigneeNickname string) (Task, Task, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for i, task := range b.Tasks {
-		if task.ID == taskID {
-			if task.AssigneeID != myID {
-				return nil, fmt.Errorf("задача не на вас")
+
+	for i := range b.tasks {
+		if b.tasks[i].ID == taskID {
+			old := b.tasks[i]
+			b.tasks[i].AssigneeID = assigneeID
+			b.tasks[i].AssigneeNickname = assigneeNickname
+			return old, b.tasks[i], nil
+		}
+	}
+	return Task{}, Task{}, ErrTaskNotFound
+}
+
+func (b *Bot) unassign(taskID, myID int64) (Task, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for i := range b.tasks {
+		if b.tasks[i].ID == taskID {
+			if b.tasks[i].AssigneeID != myID {
+				return Task{}, ErrTaskNotOnYou
 			}
-			b.Tasks[i].AssigneeID = 0
-			b.Tasks[i].AssigneeNickname = ""
-			return &b.Tasks[i], nil
+			b.tasks[i].AssigneeID = 0
+			b.tasks[i].AssigneeNickname = ""
+			return b.tasks[i], nil
 		}
 	}
-	return nil, fmt.Errorf("задача не найдена")
+	return Task{}, ErrTaskNotFound
 }
 
-// /resolve_$ID - выполняет задачу, удаляет её из списка
-func (b *Bot) handleResolveTask(taskID int64) *Task {
+func (b *Bot) resolve(taskID int64) (Task, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for i, task := range b.Tasks {
-		if task.ID == taskID {
-			removed := task
-			b.Tasks = append(b.Tasks[:i], b.Tasks[i+1:]...)
 
-			return &removed
+	for i := range b.tasks {
+		if b.tasks[i].ID == taskID {
+			removed := b.tasks[i]
+			b.tasks = append(b.tasks[:i], b.tasks[i+1:]...)
+			return removed, nil
 		}
 	}
-	return nil
+	return Task{}, ErrTaskNotFound
 }
 
-// /my - показывает задачи, которые назначены на меня
-func (b Bot) handleMeAssignee(myID int64) []Task {
+func (b *Bot) myTasks(myID int64) []Task {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	TasksOnMe := make([]Task, 0)
 
-	for _, task := range b.Tasks {
-		if task.AssigneeID == myID {
-			TasksOnMe = append(TasksOnMe, task)
+	out := make([]Task, 0)
+	for _, t := range b.tasks {
+		if t.AssigneeID == myID {
+			out = append(out, t)
 		}
 	}
-
-	if len(TasksOnMe) != 0 {
-		return TasksOnMe
-	}
-
-	return []Task{}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out
 }
 
-// /owner - показывает задачи, которые были созданы мной. Подробности форматирования смотрите в тестах.
-func (b Bot) handleMeOwner(myID int64) []Task {
+func (b *Bot) ownerTasks(myID int64) []Task {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	myTasks := make([]Task, 0)
 
-	for _, task := range b.Tasks {
-		if task.OwnerID == myID {
-			myTasks = append(myTasks, task)
+	out := make([]Task, 0)
+	for _, t := range b.tasks {
+		if t.OwnerID == myID {
+			out = append(out, t)
 		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
 
-	if len(myTasks) != 0 {
-		return myTasks
+func formatTaskLine(t Task, viewerID int64, withAssigneeLabel bool) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%d. %s by @%s", t.ID, t.Title, t.OwnerNickname)
+
+	switch {
+	case t.AssigneeID == 0:
+
+		sb.WriteString("\n/assign_" + strconv.FormatInt(t.ID, 10))
+	case withAssigneeLabel && t.AssigneeID == viewerID:
+		sb.WriteString("\nassignee: я")
+		sb.WriteString(fmt.Sprintf("\n/unassign_%d /resolve_%d", t.ID, t.ID))
+	case withAssigneeLabel:
+		sb.WriteString("\nassignee: @" + t.AssigneeNickname)
+	default:
+		sb.WriteString(fmt.Sprintf("\n/unassign_%d /resolve_%d", t.ID, t.ID))
 	}
+	return sb.String()
+}
 
-	return []Task{}
+func formatTaskList(tasks []Task, viewerID int64) string {
+	if len(tasks) == 0 {
+		return "Нет задач"
+	}
+	parts := make([]string, 0, len(tasks))
+	for _, t := range tasks {
+		parts = append(parts, formatTaskLine(t, viewerID, true))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func formatTaskListShort(tasks []Task, viewerID int64) string {
+	if len(tasks) == 0 {
+		return "Нет задач"
+	}
+	parts := make([]string, 0, len(tasks))
+	for _, t := range tasks {
+		parts = append(parts, formatTaskLine(t, viewerID, false))
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func (b *Bot) handleMessage(bot *tgbotapi.BotAPI, upd tgbotapi.Update) {
 	msg := upd.Message
-	if msg == nil {
-		log.Println("сообщение из бота = nil")
+	if msg == nil || msg.From == nil {
 		return
 	}
 
@@ -181,83 +206,144 @@ func (b *Bot) handleMessage(bot *tgbotapi.BotAPI, upd tgbotapi.Update) {
 	chatID := msg.Chat.ID
 	text := msg.Text
 
-	send := func(text string) {
+	send := func(chatID int64, text string) {
 		if _, err := bot.Send(tgbotapi.NewMessage(chatID, text)); err != nil {
-			log.Fatalln("ошибка отправки")
+			log.Println("send error:", err)
 		}
 	}
 
 	switch {
 	case text == "/tasks":
-		tasks := b.handleTaskList()
-		send("") // форматированный вывод
-		_ = tasks
+		send(chatID, formatTaskList(b.listTasks(), user.ID))
+
+	case text == "/my":
+		send(chatID, formatTaskListShort(b.myTasks(user.ID), user.ID))
+
+	case text == "/owner":
+		send(chatID, formatTaskListShort(b.ownerTasks(user.ID), user.ID))
 
 	case strings.HasPrefix(text, "/new "):
 		title := strings.TrimPrefix(text, "/new ")
-		b.handleCreateTask(title, user)
-		send("") // форматированный вывод
+		if title == "" {
+			send(chatID, "Пустое название задачи")
+			return
+		}
+		task := b.createTask(title, user.ID, user.UserName)
+		send(chatID, fmt.Sprintf("Задача %q создана, id=%d", task.Title, task.ID))
 
-	case strings.HasPrefix(text, "/assign"):
+	case strings.HasPrefix(text, "/assign_"):
+		id, err := parseID(text, "/assign_")
+		if err != nil {
+			send(chatID, "Неверный id задачи")
+			return
+		}
+		old, updated, err := b.assign(id, user.ID, user.UserName)
+		if err != nil {
+			send(chatID, "Задача не найдена")
+			return
+		}
+		send(chatID, fmt.Sprintf("Задача %q назначена на вас", updated.Title))
 
-	case strings.HasPrefix(text, "/unassign"):
+		if old.AssigneeID != 0 && old.AssigneeID != user.ID {
+			send(old.AssigneeID, fmt.Sprintf(
+				"Задача %q назначена на @%s", updated.Title, user.UserName))
+		} else if old.AssigneeID == 0 && updated.OwnerID != user.ID {
+			send(updated.OwnerID, fmt.Sprintf(
+				"Задача %q назначена на @%s", updated.Title, user.UserName))
+		}
 
-	case strings.HasPrefix(text, "/resolve"):
+	case strings.HasPrefix(text, "/unassign_"):
+		id, err := parseID(text, "/unassign_")
+		if err != nil {
+			send(chatID, "Неверный id задачи")
+			return
+		}
+		task, err := b.unassign(id, user.ID)
+		switch {
+		case errors.Is(err, ErrTaskNotOnYou):
+			send(chatID, "Задача не на вас")
+		case err != nil:
+			send(chatID, "Задача не найдена")
+		default:
+			send(chatID, "Принято")
+			if task.OwnerID != user.ID {
+				send(task.OwnerID, fmt.Sprintf(
+					"Задача %q осталась без исполнителя", task.Title))
+			}
+		}
 
-	case strings.HasPrefix(text, "/my"):
-
-	case strings.HasPrefix(text, "/owner"):
-		// /assign_$ID
-		// /unassign_$ID
-		// /resolve_$ID
-		// /my
-		// /owner
+	case strings.HasPrefix(text, "/resolve_"):
+		id, err := parseID(text, "/resolve_")
+		if err != nil {
+			send(chatID, "Неверный id задачи")
+			return
+		}
+		task, err := b.resolve(id)
+		if err != nil {
+			send(chatID, "Задача не найдена")
+			return
+		}
+		send(chatID, fmt.Sprintf("Задача %q выполнена", task.Title))
+		if task.OwnerID != user.ID {
+			send(task.OwnerID, fmt.Sprintf(
+				"Задача %q выполнена @%s", task.Title, user.UserName))
+		}
 	}
+}
+
+func parseID(text, prefix string) (int64, error) {
+	return strconv.ParseInt(strings.TrimPrefix(text, prefix), 10, 64)
 }
 
 func startTaskBot(ctx context.Context) error {
 	bot, err := tgbotapi.NewBotAPI(BotToken)
 	if err != nil {
-		return fmt.Errorf("")
+		return fmt.Errorf("new bot api: %w", err)
+	}
+	log.Printf("authorized as @%s", bot.Self.UserName)
+
+	hw, err := tgbotapi.NewWebhook(WebhookURL)
+	if err != nil {
+		return fmt.Errorf("set webhook: %w", err)
 	}
 
-	fmt.Printf("Авторизован аккаунт: %s\n", bot.Self.UserName)
-
-	wh, err := tgbotapi.NewWebhook(WebhookURL)
-	if err != nil {
-		return fmt.Errorf("")
+	if _, err := bot.Request(hw); err != nil {
+		return fmt.Errorf("error request: %w", err)
 	}
 
-	_, err = bot.Request(wh)
+	u, err := url.Parse(WebhookURL)
 	if err != nil {
-		return fmt.Errorf("")
+		return fmt.Errorf("parse webhook url: %w", err)
+	}
+	addr := u.Host
+	if u.Port() == "" {
+		if u.Scheme == "https" {
+			addr += ":443"
+		} else {
+			addr += ":80"
+		}
 	}
 
 	updates := bot.ListenForWebhook("/")
 
+	srv := &http.Server{Addr: addr}
 	go func() {
-		if err := http.ListenAndServe(":8081", nil); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Println("http server error:", err)
 		}
 	}()
 
 	b := NewBot()
 
-	http.HandleFunc("/state", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("всё работает корректно"))
-	})
-
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("бот завершён из-за отмены контекста")
+			_ = srv.Close()
 			return nil
 		case upd, ok := <-updates:
 			if !ok {
+				_ = srv.Close()
 				return nil
-			}
-			if upd.Message == nil {
-				continue
 			}
 			b.handleMessage(bot, upd)
 		}
@@ -265,8 +351,7 @@ func startTaskBot(ctx context.Context) error {
 }
 
 func main() {
-	err := startTaskBot(context.Background())
-	if err != nil {
-		panic(err)
+	if err := startTaskBot(context.Background()); err != nil {
+		log.Fatal(err)
 	}
 }
